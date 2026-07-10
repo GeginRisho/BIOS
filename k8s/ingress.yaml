@@ -1,0 +1,33 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: bios-ingress
+  namespace: bios-production
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "16m"
+    nginx.ingress.kubernetes.io/rate-limit: "20"
+spec:
+  rules:
+  - host: bios.globalintelligence.io
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: bios-frontend-svc
+            port:
+              number: 80
+      - path: /api/v1
+        pathType: Prefix
+        backend:
+          service:
+            name: bios-gateway-svc
+            port:
+              number: 80
+  tls:
+  - hosts:
+    - bios.globalintelligence.io
+    secretName: bios-tls-certs

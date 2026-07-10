@@ -1,0 +1,434 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── Leaflet CSS ──────────────────────────────────── */
+@import "leaflet/dist/leaflet.css";
+
+/* ── Design Tokens ───────────────────────────────── */
+:root {
+  /* Brand palette */
+  --bios-50:  #EEF2FF;
+  --bios-100: #E0E7FF;
+  --bios-200: #C7D2FE;
+  --bios-400: #818CF8;
+  --bios-500: #6366F1;
+  --bios-600: #4F46E5;
+  --bios-700: #4338CA;
+  --bios-900: #312E81;
+
+  /* Surface palette */
+  --surface-bg:      #F8FAFC;
+  --surface-card:    #FFFFFF;
+  --surface-sidebar: #FFFFFF;
+  --surface-hover:   #F1F5F9;
+  --surface-border:  #E2E8F0;
+
+  /* Text */
+  --text-primary:   #0F172A;
+  --text-secondary: #475569;
+  --text-muted:     #94A3B8;
+  --text-accent:    #4F46E5;
+
+  /* Status */
+  --green:  #10B981;
+  --red:    #EF4444;
+  --amber:  #F59E0B;
+  --orange: #F97316;
+  --purple: #8B5CF6;
+
+  /* Radii */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+
+  /* Shadows */
+  --shadow-xs: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --shadow-sm: 0 1px 3px 0 rgb(0 0 0 / 0.08), 0 1px 2px -1px rgb(0 0 0 / 0.04);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.07), 0 2px 4px -2px rgb(0 0 0 / 0.05);
+  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.07), 0 4px 6px -4px rgb(0 0 0 / 0.04);
+  --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.07), 0 8px 10px -6px rgb(0 0 0 / 0.04);
+}
+
+/* ── Base Reset ──────────────────────────────────── */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  margin: 0;
+  background-color: var(--surface-bg);
+  color: var(--text-primary);
+  font-family: 'Outfit', 'Inter', system-ui, sans-serif;
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  min-height: 100vh;
+  overflow-x: hidden;
+  line-height: 1.6;
+}
+
+/* ── Premium Card Component ──────────────────────── */
+.bios-card {
+  background: var(--surface-card);
+  border: 1px solid var(--surface-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  transition: box-shadow 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+}
+
+.bios-card:hover {
+  box-shadow: var(--shadow-md);
+  border-color: var(--bios-200);
+}
+
+.bios-card-interactive:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-lg);
+  border-color: var(--bios-300);
+}
+
+/* ── Glassmorphism (Light) ───────────────────────── */
+.glass-panel {
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(226, 232, 240, 0.7);
+  box-shadow: var(--shadow-md);
+}
+
+.glass-card {
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(226, 232, 240, 0.6);
+  box-shadow: var(--shadow-sm);
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.glass-card:hover {
+  border-color: var(--bios-200);
+  box-shadow: 0 8px 20px -4px rgba(79, 70, 229, 0.10);
+}
+
+/* ── Sidebar ─────────────────────────────────────── */
+.bios-sidebar {
+  background: var(--surface-sidebar);
+  border-right: 1px solid var(--surface-border);
+  box-shadow: 2px 0 8px 0 rgb(0 0 0 / 0.04);
+}
+
+/* ── Buttons ─────────────────────────────────────── */
+.btn-primary {
+  background: var(--bios-600);
+  color: white;
+  border: none;
+  border-radius: var(--radius-md);
+  padding: 0.5rem 1.25rem;
+  font-weight: 600;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: background 0.15s ease, box-shadow 0.15s ease, transform 0.1s ease;
+  box-shadow: 0 1px 2px 0 rgba(79, 70, 229, 0.25);
+}
+
+.btn-primary:hover {
+  background: var(--bios-700);
+  box-shadow: 0 4px 12px 0 rgba(79, 70, 229, 0.3);
+  transform: translateY(-1px);
+}
+
+.btn-primary:active {
+  transform: translateY(0);
+}
+
+.btn-secondary {
+  background: white;
+  color: var(--text-secondary);
+  border: 1px solid var(--surface-border);
+  border-radius: var(--radius-md);
+  padding: 0.5rem 1.25rem;
+  font-weight: 600;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-secondary:hover {
+  border-color: var(--bios-200);
+  color: var(--bios-600);
+  background: var(--bios-50);
+}
+
+/* ── Input Fields ────────────────────────────────── */
+.bios-input {
+  width: 100%;
+  padding: 0.625rem 0.875rem;
+  background: white;
+  border: 1.5px solid var(--surface-border);
+  border-radius: var(--radius-md);
+  font-size: 0.875rem;
+  color: var(--text-primary);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  outline: none;
+}
+
+.bios-input:focus {
+  border-color: var(--bios-500);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.12);
+}
+
+.bios-input::placeholder {
+  color: var(--text-muted);
+}
+
+/* ── Badge / Tag ─────────────────────────────────── */
+.bios-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.bios-badge-blue   { background: var(--bios-50);  color: var(--bios-600); border: 1px solid var(--bios-100); }
+.bios-badge-green  { background: #ECFDF5; color: #059669;  border: 1px solid #A7F3D0; }
+.bios-badge-red    { background: #FEF2F2; color: #DC2626;  border: 1px solid #FECACA; }
+.bios-badge-amber  { background: #FFFBEB; color: #D97706;  border: 1px solid #FDE68A; }
+.bios-badge-purple { background: #F5F3FF; color: #7C3AED;  border: 1px solid #DDD6FE; }
+
+/* ── Leaflet Map Overrides ───────────────────────── */
+.leaflet-container {
+  background: #EFF6FF !important;
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--surface-border);
+}
+
+.leaflet-control-zoom {
+  border: none !important;
+  border-radius: var(--radius-md) !important;
+  box-shadow: var(--shadow-md) !important;
+  overflow: hidden;
+}
+
+.leaflet-control-zoom a {
+  background: white !important;
+  color: var(--text-secondary) !important;
+  border-bottom: 1px solid var(--surface-border) !important;
+  transition: background 0.15s !important;
+}
+
+.leaflet-control-zoom a:hover {
+  background: var(--bios-50) !important;
+  color: var(--bios-600) !important;
+}
+
+.leaflet-popup-content-wrapper {
+  border-radius: var(--radius-md) !important;
+  box-shadow: var(--shadow-xl) !important;
+  border: 1px solid var(--surface-border) !important;
+  padding: 0 !important;
+}
+
+.leaflet-popup-tip {
+  background: white !important;
+}
+
+.leaflet-tooltip.custom-permanent-tooltip {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+}
+
+/* ── Scrollbar ───────────────────────────────────── */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--bios-200); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--bios-400); }
+
+/* ── Animations ──────────────────────────────────── */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideInRight {
+  from { opacity: 0; transform: translateX(16px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes pulse-ring {
+  0%         { transform: scale(0.5); opacity: 0.8; }
+  80%, 100%  { transform: scale(2);   opacity: 0; }
+}
+
+@keyframes shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position:  200% 0; }
+}
+
+.animate-fade-in   { animation: fadeIn 0.3s ease forwards; }
+.animate-slide-in  { animation: slideInRight 0.3s ease forwards; }
+
+.animate-pulse-ring {
+  animation: pulse-ring 1.6s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+}
+
+/* ── Skeleton Loading ────────────────────────────── */
+.skeleton {
+  background: linear-gradient(90deg, #F1F5F9 25%, #E2E8F0 50%, #F1F5F9 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: var(--radius-sm);
+}
+
+/* ── Table Styles ────────────────────────────────── */
+.bios-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8125rem;
+}
+
+.bios-table th {
+  background: var(--surface-bg);
+  color: var(--text-muted);
+  font-weight: 700;
+  font-size: 0.6875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 0.625rem 1rem;
+  border-bottom: 1px solid var(--surface-border);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.bios-table td {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid #F1F5F9;
+  color: var(--text-secondary);
+  vertical-align: middle;
+}
+
+.bios-table tr:hover td {
+  background: var(--surface-hover);
+}
+
+.bios-table tr:last-child td {
+  border-bottom: none;
+}
+
+/* ── Auth Page ───────────────────────────────────── */
+.auth-surface {
+  background: linear-gradient(135deg, #F0F4FF 0%, #E8EEFF 50%, #F5F3FF 100%);
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.auth-card {
+  background: white;
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--surface-border);
+  box-shadow: var(--shadow-xl);
+  padding: 2.5rem;
+  width: 100%;
+  max-width: 420px;
+}
+
+/* ── Stat Cards ──────────────────────────────────── */
+.stat-card {
+  background: white;
+  border: 1px solid var(--surface-border);
+  border-radius: var(--radius-lg);
+  padding: 1.25rem;
+  box-shadow: var(--shadow-xs);
+}
+
+/* ── Section Headings ────────────────────────────── */
+.section-title {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+}
+
+/* ── Progress Bar ────────────────────────────────── */
+.progress-bar {
+  height: 6px;
+  background: #F1F5F9;
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--bios-500), var(--bios-400));
+  transition: width 0.5s ease;
+}
+
+/* ── Toast Notification ──────────────────────────── */
+.bios-toast {
+  position: fixed;
+  bottom: 1.5rem;
+  right: 1.5rem;
+  z-index: 9999;
+  background: white;
+  border: 1px solid var(--surface-border);
+  border-left: 4px solid var(--bios-500);
+  border-radius: var(--radius-md);
+  padding: 0.875rem 1.25rem;
+  box-shadow: var(--shadow-xl);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--text-primary);
+  max-width: 340px;
+  animation: slideInRight 0.3s ease forwards;
+}
+
+/* ── Nav Item ────────────────────────────────────── */
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0.5rem 0.875rem;
+  border-radius: var(--radius-md);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  border: none;
+  background: transparent;
+  width: 100%;
+  text-align: left;
+}
+
+.nav-item:hover {
+  background: var(--bios-50);
+  color: var(--bios-600);
+}
+
+.nav-item.active {
+  background: var(--bios-50);
+  color: var(--bios-600);
+  font-weight: 700;
+}
+
+.nav-item.active .nav-icon {
+  color: var(--bios-600);
+}

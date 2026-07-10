@@ -1,0 +1,38 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: 'bios-gateway'
+    static_configs:
+      - targets: ['bios-gateway-svc.bios-production.svc.cluster.local:80']
+
+  - job_name: 'auth-service'
+    metrics_path: '/metrics'
+    static_configs:
+      - targets: ['bios-auth-service-svc.bios-production.svc.cluster.local:8001']
+
+  - job_name: 'crawler-service'
+    metrics_path: '/metrics'
+    static_configs:
+      - targets: ['bios-crawler-service-svc.bios-production.svc.cluster.local:8005']
+
+  - job_name: 'business-service'
+    metrics_path: '/metrics'
+    static_configs:
+      - targets: ['bios-business-service-svc.bios-production.svc.cluster.local:8002']
+
+  - job_name: 'kg-service'
+    metrics_path: '/metrics'
+    static_configs:
+      - targets: ['bios-kg-service-svc.bios-production.svc.cluster.local:8003']
+
+  - job_name: 'twin-service'
+    metrics_path: '/metrics'
+    static_configs:
+      - targets: ['bios-twin-service-svc.bios-production.svc.cluster.local:8004']
+
+  - job_name: 'agent-service'
+    metrics_path: '/metrics'
+    static_configs:
+      - targets: ['bios-agent-service-svc.bios-production.svc.cluster.local:8009']
