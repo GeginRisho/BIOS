@@ -41,8 +41,16 @@ class BaseServiceSettings(BaseSettings):
     def database_url(self) -> str:
         """
         Returns SQLite URL in mock/dev mode, PostgreSQL in production.
-        SQLite database is stored in the dedicated database/ folder.
+        Supports DATABASE_URL environment variable for production platforms like Render.
         """
+        env_db_url = os.environ.get("DATABASE_URL")
+        if env_db_url:
+            if env_db_url.startswith("postgres://"):
+                env_db_url = env_db_url.replace("postgres://", "postgresql+asyncpg://", 1)
+            elif env_db_url.startswith("postgresql://"):
+                env_db_url = env_db_url.replace("postgresql://", "postgresql+asyncpg://", 1)
+            return env_db_url
+
         use_sqlite = (
             self.POSTGRES_HOST == "sqlite"
             or os.environ.get("BIOS_MOCK_MODE", "true").lower() == "true"

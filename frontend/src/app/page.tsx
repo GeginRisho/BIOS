@@ -93,6 +93,16 @@ const POPULAR_SEARCHES = [
   "Infosys Ltd."
 ];
 
+const getServiceUrl = (port: number, path: string): string => {
+  const baseUrl = process.env.NEXT_PUBLIC_API_URL || "";
+  if (baseUrl) {
+    const cleanBase = baseUrl.replace(/\/$/, "");
+    const cleanPath = path.replace(/^\//, "");
+    return `${cleanBase}/${cleanPath}`;
+  }
+  return `http://localhost:${port}/${path.replace(/^\//, "")}`;
+};
+
 export default function BIOSDashboard() {
   const { 
     user, 
@@ -263,7 +273,7 @@ export default function BIOSDashboard() {
   // Fetch businesses from backend on load
   const loadBusinesses = async () => {
     try {
-      const response = await fetch("http://localhost:8002/api/v1/businesses");
+      const response = await fetch(getServiceUrl(8002, "/api/v1/businesses"));
       if (response.ok) {
         const data = await response.json();
         if (data && data.length > 0) {
@@ -283,7 +293,7 @@ export default function BIOSDashboard() {
   const loadAuditLogs = async () => {
     if (!user || !user.token) return;
     try {
-      const response = await fetch("http://localhost:8001/api/v1/auth/audit", {
+      const response = await fetch(getServiceUrl(8001, "/api/v1/auth/audit"), {
         headers: { "Authorization": `Bearer ${user.token}` }
       });
       if (response.ok) {
@@ -304,7 +314,7 @@ export default function BIOSDashboard() {
     if (!selectedBiz) return;
     const fetchReport = async () => {
       try {
-        const response = await fetch(`http://localhost:8012/api/v1/reports/generate/${selectedBiz.id}`, {
+        const response = await fetch(getServiceUrl(8012, `/api/v1/reports/generate/${selectedBiz.id}`), {
           method: "POST"
         });
         if (response.ok) {
@@ -352,7 +362,7 @@ export default function BIOSDashboard() {
     setAuthSuccess("");
 
     try {
-      const response = await fetch("http://localhost:8001/api/v1/auth/login", {
+      const response = await fetch(getServiceUrl(8001, "/api/v1/auth/login"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: authEmail, password: authPassword }),
@@ -360,7 +370,7 @@ export default function BIOSDashboard() {
       if (response.ok) {
         const data = await response.json();
         // Resolve profile
-        const meResp = await fetch("http://localhost:8001/api/v1/auth/me", {
+        const meResp = await fetch(getServiceUrl(8001, "/api/v1/auth/me"), {
           headers: { "Authorization": `Bearer ${data.access_token}` }
         });
         if (meResp.ok) {
@@ -396,7 +406,7 @@ export default function BIOSDashboard() {
     setAuthError("");
     setAuthSuccess("");
     try {
-      const response = await fetch("http://localhost:8001/api/v1/auth/register", {
+      const response = await fetch(getServiceUrl(8001, "/api/v1/auth/register"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: authEmail, password: authPassword, full_name: "SaaS Enterprise User", role: authRole }),
@@ -511,7 +521,7 @@ export default function BIOSDashboard() {
     }, 100);
 
     try {
-      const response = await fetch("http://localhost:8008/api/v1/simulations/run", {
+      const response = await fetch(getServiceUrl(8008, "/api/v1/simulations/run"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -596,7 +606,7 @@ export default function BIOSDashboard() {
     ]);
 
     try {
-      const response = await fetch("http://localhost:8009/api/v1/agents/chat", {
+      const response = await fetch(getServiceUrl(8009, "/api/v1/agents/chat"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message: agentInput })
@@ -673,7 +683,7 @@ export default function BIOSDashboard() {
     };
 
     try {
-      const response = await fetch("http://localhost:8002/api/v1/businesses", {
+      const response = await fetch(getServiceUrl(8002, "/api/v1/businesses"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)
@@ -716,7 +726,7 @@ export default function BIOSDashboard() {
     };
 
     try {
-      const response = await fetch(`http://localhost:8002/api/v1/businesses/${editingBiz.id}`, {
+      const response = await fetch(getServiceUrl(8002, `/api/v1/businesses/${editingBiz.id}`), {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)
@@ -756,7 +766,7 @@ export default function BIOSDashboard() {
   // Delete Company CRUD Action
   const handleDeleteCompany = async (id: string) => {
     try {
-      const response = await fetch(`http://localhost:8002/api/v1/businesses/${id}`, {
+      const response = await fetch(getServiceUrl(8002, `/api/v1/businesses/${id}`), {
         method: "DELETE"
       });
       if (response.ok) {
@@ -803,7 +813,7 @@ export default function BIOSDashboard() {
         };
 
         try {
-          const res = await fetch("http://localhost:8002/api/v1/businesses", {
+          const res = await fetch(getServiceUrl(8002, "/api/v1/businesses"), {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(payload)
