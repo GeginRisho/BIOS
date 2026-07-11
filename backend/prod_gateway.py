@@ -133,6 +133,19 @@ async def websocket_proxy(websocket: WebSocket):
     except Exception as e:
         logger.error(f"WebSocket proxy exception: {str(e)}")
 
+# Explicit root / health endpoints
+@app.get("/")
+async def root_endpoint():
+    return {
+        "status": "ok",
+        "service": "BIOS Production Gateway",
+        "version": "1.0"
+    }
+
+@app.get("/health")
+async def health_endpoint():
+    return {"status": "healthy"}
+
 # Global HTTP Request Routing Proxy
 @app.api_route("/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "PATCH"])
 async def route_proxy(request: Request, path: str):
@@ -146,29 +159,6 @@ async def route_proxy(request: Request, path: str):
             break
             
     if not matched_port:
-        # Default root handler
-        if full_path in ("/", "/health"):
-            # Health check gateway
-            health_status = {}
-            all_ok = True
-            for svc in SERVICES:
-                name = svc["name"]
-                port = svc["port"]
-                try:
-                    r = await client.get(f"http://127.0.0.1:{port}/health", timeout=1.0)
-                    if r.status_code == 200:
-                        health_status[name] = "online"
-                    else:
-                        health_status[name] = f"error_{r.status_code}"
-                        all_ok = False
-                except Exception:
-                    health_status[name] = "offline"
-                    all_ok = False
-            return JSONResponse(status_code=200 if all_ok else 503, content={
-                "status": "healthy" if all_ok else "unhealthy",
-                "service": "BIOS Gateway Proxy",
-                "microservices": health_status
-            })
         return JSONResponse(status_code=404, content={"detail": f"Path '{full_path}' not found on gateway"})
 
     # Forward the request to the local microservice
