@@ -38,9 +38,21 @@ SERVICES = [
     {"name": "notification_service", "port": 8011, "prefix": "/api/v1/notifications"},
     {"name": "report_service", "port": 8012, "prefix": "/api/v1/reports"},
 ]
-
 processes = []
 client = httpx.AsyncClient(timeout=30.0)
+
+import threading
+
+def log_stream(name, stream):
+    try:
+        for line in iter(stream.readline, ''):
+            if not line:
+                break
+            logger.info(f"[{name}] {line.strip()}")
+    except Exception as e:
+        logger.error(f"Error reading log stream for {name}: {str(e)}")
+    finally:
+        stream.close()
 
 def start_services():
     backend_dir = os.path.dirname(os.path.abspath(__file__))
@@ -76,10 +88,16 @@ def start_services():
         
         proc = subprocess.Popen(
             cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
             env=env,
-            cwd=parent_dir
+            cwd=parent_dir,
+            text=True,
+            bufsize=1
         )
         processes.append((name, proc))
+        t = threading.Thread(target=log_stream, args=(name, proc.stdout), daemon=True)
+        t.start()
 
     logger.info("Waiting 8 seconds for microservices to fully initialize...")
     time.sleep(8)

@@ -57,9 +57,10 @@ class BaseServiceSettings(BaseSettings):
             or self.BIOS_MOCK_MODE
         )
         if use_sqlite:
-            # Resolve relative to the location of config.py (located in <workspace_root>/backend/shared/config.py)
-            base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-            db_dir = os.path.join(base_dir, "database")
+            # Resolve database inside the backend folder to ensure write permissions on Render and local dev
+            shared_dir = os.path.dirname(os.path.abspath(__file__)) # backend/shared
+            backend_dir = os.path.dirname(shared_dir) # backend
+            db_dir = os.path.join(backend_dir, "database")
             os.makedirs(db_dir, exist_ok=True)
             return f"sqlite+aiosqlite:///{os.path.join(db_dir, f'{self.POSTGRES_DB}.db')}"
         return (
