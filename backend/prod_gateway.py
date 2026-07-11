@@ -14,6 +14,23 @@ from starlette.background import BackgroundTask
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("prod_gateway")
 
+# Create a symlink 'backend -> .' in the current directory if it does not exist.
+# This ensures that absolute imports starting with 'backend.' resolve correctly
+# when deployed to Render where the root directory is set to 'backend' (meaning the
+# files are in the root of the container and the 'backend' folder prefix is lost).
+backend_dir_global = os.path.dirname(os.path.abspath(__file__))
+symlink_path_global = os.path.join(backend_dir_global, "backend")
+if not os.path.lexists(symlink_path_global):
+    try:
+        if os.name == "nt":
+            # On Windows, create a directory junction
+            subprocess.run(["cmd", "/c", f"mklink /J \"{symlink_path_global}\" \"{backend_dir_global}\""], capture_output=True)
+        else:
+            os.symlink(".", symlink_path_global)
+        logger.info(f"Created 'backend' symlink/junction: {symlink_path_global} -> {backend_dir_global}")
+    except Exception as e:
+        logger.warning(f"Could not create 'backend' symlink/junction: {e}")
+
 app = FastAPI(title="BIOS Production Gateway Proxy")
 
 # CORS config
@@ -69,12 +86,21 @@ def start_services():
     # Render assigns database URL, make sure the microservices inherit this.
     logger.info(f"Using DATABASE_URL: {os.environ.get('DATABASE_URL') is not None}")
 
+    # Determine working directory based on whether the backend folder exists.
+    # On Render, the symlink 'backend -> .' is used so we can run directly inside backend_dir.
+    symlink_path = os.path.join(backend_dir, "backend")
+    if os.path.lexists(symlink_path):
+        cwd_dir = backend_dir
+        logger.info(f"Using backend_dir as CWD: {cwd_dir}")
+    else:
+        cwd_dir = parent_dir
+        logger.info(f"Using parent_dir as CWD: {cwd_dir}")
+
     for svc in SERVICES:
         name = svc["name"]
         port = svc["port"]
         logger.info(f"Launching microservice {name} on port {port}...")
         
-        # Run relative to the parent directory or backend directory
         cmd = [
             python_exe,
             "-m",
@@ -91,7 +117,7 @@ def start_services():
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             env=env,
-            cwd=parent_dir,
+            cwd=cwd_dir,
             text=True,
             bufsize=1
         )
