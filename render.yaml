@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: bios-backend
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn prod_gateway:app --host 0.0.0.0 --port $PORT
+    rootDirectory: backend
+    envVars:
+      - key: BIOS_MOCK_MODE
+        value: "true"
+      - key: JWT_SECRET_KEY
+        value: "bios_super_secret_signing_key_2026_jwt_token_auth"
+      - key: DATABASE_URL
+        sync: false
