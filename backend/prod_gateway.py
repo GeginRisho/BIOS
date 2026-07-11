@@ -141,14 +141,30 @@ def start_services():
         t = threading.Thread(target=log_stream, args=(name, proc.stdout), daemon=True)
         t.start()
 
-    logger.info("Waiting 12 seconds for microservices to fully initialize...")
-    time.sleep(12)
+    logger.info("All microservice processes launched.")
+
+# Track whether services are booted
+_services_ready = False
 
 @app.on_event("startup")
-def startup_event():
-    logger.info("Gateway starting up...")
-    start_services()
-    logger.info("Gateway boot sequence complete.")
+async def startup_event():
+    logger.info("Gateway starting up — launching microservices in background...")
+    # Run start_services in a thread so uvicorn can accept health-check
+    # connections immediately (Render times out if we block here)
+    t = threading.Thread(target=_boot_services, daemon=True)
+    t.start()
+    logger.info("Gateway accepting connections. Microservices booting in background.")
+
+def _boot_services():
+    global _services_ready
+    try:
+        start_services()
+        import time as _t
+        _t.sleep(12)  # give services time to finish initialising
+        _services_ready = True
+        logger.info("Gateway boot sequence complete. All microservices ready.")
+    except Exception as e:
+        logger.error(f"Error during background service boot: {e}")
 
 @app.on_event("shutdown")
 async def shutdown_event():
@@ -252,7 +268,7 @@ async def root_endpoint():
 
 @app.get("/health")
 async def health_endpoint():
-    return {"status": "healthy"}
+    return {"status": "ready" if _services_ready else "booting"}
 
 # Global HTTP Request Routing Proxy
 @app.api_route("/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "PATCH"])
