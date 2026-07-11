@@ -75,32 +75,48 @@ def start_services():
     backend_dir = os.path.dirname(os.path.abspath(__file__))
     parent_dir = os.path.dirname(backend_dir)
     python_exe = sys.executable or "python"
-    
+
     env = os.environ.copy()
     env["PYTHONUNBUFFERED"] = "1"
-    # Ensure BOTH parent directory and backend directory are in PYTHONPATH
-    current_pythonpath = env.get("PYTHONPATH", "")
     sep = ";" if os.name == "nt" else ":"
-    env["PYTHONPATH"] = f"{parent_dir}{sep}{backend_dir}{sep}{current_pythonpath}"
-    
-    # Render assigns database URL, make sure the microservices inherit this.
-    logger.info(f"Using DATABASE_URL: {os.environ.get('DATABASE_URL') is not None}")
 
-    # Determine working directory based on whether the backend folder exists.
-    # On Render, the symlink 'backend -> .' is used so we can run directly inside backend_dir.
+    # ---------------------------------------------------------------
+    # Ensure a "backend" symlink exists inside backend_dir so that
+    # absolute imports like "backend.services.X" resolve correctly.
+    # On Render, rootDirectory=backend means backend_dir IS the app
+    # root — there is no parent "backend" folder.  The symlink makes
+    # backend_dir/backend -> backend_dir so the package resolves.
+    # ---------------------------------------------------------------
     symlink_path = os.path.join(backend_dir, "backend")
-    if os.path.lexists(symlink_path):
-        cwd_dir = backend_dir
-        logger.info(f"Using backend_dir as CWD: {cwd_dir}")
-    else:
-        cwd_dir = parent_dir
-        logger.info(f"Using parent_dir as CWD: {cwd_dir}")
+    if not os.path.lexists(symlink_path):
+        try:
+            if os.name == "nt":
+                subprocess.run(
+                    ["cmd", "/c", f'mklink /J "{symlink_path}" "{backend_dir}"'],
+                    capture_output=True
+                )
+            else:
+                os.symlink(backend_dir, symlink_path)
+            logger.info(f"[start_services] Created 'backend' symlink: {symlink_path}")
+        except Exception as e:
+            logger.warning(f"[start_services] Could not create symlink: {e}")
+
+    # With the symlink in place, use backend_dir as the CWD.
+    # PYTHONPATH includes backend_dir so "import backend.X" resolves
+    # through the symlink.
+    cwd_dir = backend_dir
+    current_pythonpath = env.get("PYTHONPATH", "")
+    env["PYTHONPATH"] = f"{backend_dir}{sep}{parent_dir}{sep}{current_pythonpath}"
+
+    logger.info(f"CWD for microservices: {cwd_dir}")
+    logger.info(f"PYTHONPATH: {env['PYTHONPATH']}")
+    logger.info(f"Using DATABASE_URL: {os.environ.get('DATABASE_URL') is not None}")
 
     for svc in SERVICES:
         name = svc["name"]
         port = svc["port"]
         logger.info(f"Launching microservice {name} on port {port}...")
-        
+
         cmd = [
             python_exe,
             "-m",
@@ -109,9 +125,9 @@ def start_services():
             "--port",
             str(port),
             "--host",
-            "127.0.0.1"
+            "127.0.0.1",
         ]
-        
+
         proc = subprocess.Popen(
             cmd,
             stdout=subprocess.PIPE,
@@ -119,14 +135,14 @@ def start_services():
             env=env,
             cwd=cwd_dir,
             text=True,
-            bufsize=1
+            bufsize=1,
         )
         processes.append((name, proc))
         t = threading.Thread(target=log_stream, args=(name, proc.stdout), daemon=True)
         t.start()
 
-    logger.info("Waiting 8 seconds for microservices to fully initialize...")
-    time.sleep(8)
+    logger.info("Waiting 12 seconds for microservices to fully initialize...")
+    time.sleep(12)
 
 @app.on_event("startup")
 def startup_event():
@@ -183,42 +199,46 @@ async def debug_endpoint():
     backend_dir = os.path.dirname(os.path.abspath(__file__))
     parent_dir = os.path.dirname(backend_dir)
     python_exe = sys.executable or "python"
-    
+
     env = os.environ.copy()
     env["PYTHONUNBUFFERED"] = "1"
     sep = ";" if os.name == "nt" else ":"
-    env["PYTHONPATH"] = f"{parent_dir}{sep}{backend_dir}{sep}{env.get('PYTHONPATH', '')}"
-    
+    env["PYTHONPATH"] = f"{backend_dir}{sep}{parent_dir}{sep}{env.get('PYTHONPATH', '')}"
+
     import_status = ""
     try:
-        import backend.services.auth_service.config
+        import backend.services.auth_service.config  # type: ignore
         import_status = "settings import ok"
     except Exception as e:
         import_status = f"settings import fail: {str(e)}"
-        
-    cmd = [
-        python_exe,
-        "-c",
-        "import sys; print('Python path:', sys.path); import backend.shared.config; print('import shared ok')"
-    ]
-    
-    proc = subprocess.run(
-        cmd,
+
+    # Check if auth_service subprocess can import and start
+    import_test = subprocess.run(
+        [python_exe, "-c",
+         "import backend.services.auth_service.main; print('auth_service import ok')"],
         env=env,
-        cwd=parent_dir,
+        cwd=backend_dir,
         capture_output=True,
-        text=True
+        text=True,
+        timeout=30,
     )
-    
+
+    # Check running subprocesses
+    running = []
+    for name, proc in processes:
+        ret = proc.poll()
+        running.append({"name": name, "returncode": ret, "running": ret is None})
+
     return {
         "sys_executable": sys.executable,
         "backend_dir": backend_dir,
         "parent_dir": parent_dir,
         "import_status": import_status,
-        "stdout": proc.stdout,
-        "stderr": proc.stderr,
-        "returncode": proc.returncode,
-        "env_pythonpath": env.get("PYTHONPATH")
+        "auth_service_import_stdout": import_test.stdout,
+        "auth_service_import_stderr": import_test.stderr,
+        "auth_service_import_returncode": import_test.returncode,
+        "env_pythonpath": env.get("PYTHONPATH"),
+        "processes": running,
     }
 
 # Explicit root / health endpoints
