@@ -134,7 +134,7 @@ async def websocket_proxy(websocket: WebSocket):
         logger.error(f"WebSocket proxy exception: {str(e)}")
 
 # Global HTTP Request Routing Proxy
-@app.route("/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "PATCH"])
+@app.api_route("/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "PATCH"])
 async def route_proxy(request: Request, path: str):
     # Determine which service matches the prefix
     full_path = "/" + path
