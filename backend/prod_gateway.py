@@ -42,19 +42,25 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# On Render free tier (512MB RAM) only launch the two core services.
+# Set BIOS_FULL_MODE=true as a Render env var to enable all services.
+_full_mode = os.environ.get("BIOS_FULL_MODE", "false").lower() == "true"
+
 SERVICES = [
-    {"name": "auth_service", "port": 8001, "prefix": "/api/v1/auth"},
+    {"name": "auth_service",     "port": 8001, "prefix": "/api/v1/auth"},
     {"name": "business_service", "port": 8002, "prefix": "/api/v1/businesses"},
-    {"name": "kg_service", "port": 8003, "prefix": "/api/v1/graph"},
-    {"name": "twin_service", "port": 8004, "prefix": "/api/v1/twin"},
-    {"name": "crawler_service", "port": 8005, "prefix": "/api/v1/crawler"},
-    {"name": "prediction_service", "port": 8007, "prefix": "/api/v1/predictions"},
-    {"name": "simulation_service", "port": 8008, "prefix": "/api/v1/simulations"},
-    {"name": "agent_service", "port": 8009, "prefix": "/api/v1/agents"},
-    {"name": "search_service", "port": 8010, "prefix": "/api/v1/search"},
+] + ([
+    {"name": "kg_service",           "port": 8003, "prefix": "/api/v1/graph"},
+    {"name": "twin_service",         "port": 8004, "prefix": "/api/v1/twin"},
+    {"name": "crawler_service",      "port": 8005, "prefix": "/api/v1/crawler"},
+    {"name": "prediction_service",   "port": 8007, "prefix": "/api/v1/predictions"},
+    {"name": "simulation_service",   "port": 8008, "prefix": "/api/v1/simulations"},
+    {"name": "agent_service",        "port": 8009, "prefix": "/api/v1/agents"},
+    {"name": "search_service",       "port": 8010, "prefix": "/api/v1/search"},
     {"name": "notification_service", "port": 8011, "prefix": "/api/v1/notifications"},
-    {"name": "report_service", "port": 8012, "prefix": "/api/v1/reports"},
-]
+    {"name": "report_service",       "port": 8012, "prefix": "/api/v1/reports"},
+] if _full_mode else [])
+
 processes = []
 client = httpx.AsyncClient(timeout=30.0)
 
@@ -209,51 +215,36 @@ async def websocket_proxy(websocket: WebSocket):
     except Exception as e:
         logger.error(f"WebSocket proxy exception: {str(e)}")
 
-# Debug Endpoint to verify paths on Render
+# Debug Endpoint — lightweight, no blocking subprocesses
 @app.get("/debug")
 async def debug_endpoint():
     backend_dir = os.path.dirname(os.path.abspath(__file__))
     parent_dir = os.path.dirname(backend_dir)
-    python_exe = sys.executable or "python"
 
-    env = os.environ.copy()
-    env["PYTHONUNBUFFERED"] = "1"
-    sep = ";" if os.name == "nt" else ":"
-    env["PYTHONPATH"] = f"{backend_dir}{sep}{parent_dir}{sep}{env.get('PYTHONPATH', '')}"
-
-    import_status = ""
-    try:
-        import backend.services.auth_service.config  # type: ignore
-        import_status = "settings import ok"
-    except Exception as e:
-        import_status = f"settings import fail: {str(e)}"
-
-    # Check if auth_service subprocess can import and start
-    import_test = subprocess.run(
-        [python_exe, "-c",
-         "import backend.services.auth_service.main; print('auth_service import ok')"],
-        env=env,
-        cwd=backend_dir,
-        capture_output=True,
-        text=True,
-        timeout=30,
-    )
-
-    # Check running subprocesses
+    # Check running subprocesses without blocking
     running = []
     for name, proc in processes:
         ret = proc.poll()
         running.append({"name": name, "returncode": ret, "running": ret is None})
 
+    # Quick non-blocking import check
+    import_status = ""
+    try:
+        import importlib
+        importlib.import_module("backend.services.auth_service.config")
+        import_status = "ok"
+    except Exception as e:
+        import_status = f"fail: {e}"
+
     return {
         "sys_executable": sys.executable,
+        "python_version": sys.version,
         "backend_dir": backend_dir,
         "parent_dir": parent_dir,
+        "services_ready": _services_ready,
+        "full_mode": _full_mode,
+        "services_configured": len(SERVICES),
         "import_status": import_status,
-        "auth_service_import_stdout": import_test.stdout,
-        "auth_service_import_stderr": import_test.stderr,
-        "auth_service_import_returncode": import_test.returncode,
-        "env_pythonpath": env.get("PYTHONPATH"),
         "processes": running,
     }
 
