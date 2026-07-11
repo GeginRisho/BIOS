@@ -177,6 +177,50 @@ async def websocket_proxy(websocket: WebSocket):
     except Exception as e:
         logger.error(f"WebSocket proxy exception: {str(e)}")
 
+# Debug Endpoint to verify paths on Render
+@app.get("/debug")
+async def debug_endpoint():
+    backend_dir = os.path.dirname(os.path.abspath(__file__))
+    parent_dir = os.path.dirname(backend_dir)
+    python_exe = sys.executable or "python"
+    
+    env = os.environ.copy()
+    env["PYTHONUNBUFFERED"] = "1"
+    sep = ";" if os.name == "nt" else ":"
+    env["PYTHONPATH"] = f"{parent_dir}{sep}{backend_dir}{sep}{env.get('PYTHONPATH', '')}"
+    
+    import_status = ""
+    try:
+        import backend.services.auth_service.config
+        import_status = "settings import ok"
+    except Exception as e:
+        import_status = f"settings import fail: {str(e)}"
+        
+    cmd = [
+        python_exe,
+        "-c",
+        "import sys; print('Python path:', sys.path); import backend.shared.config; print('import shared ok')"
+    ]
+    
+    proc = subprocess.run(
+        cmd,
+        env=env,
+        cwd=parent_dir,
+        capture_output=True,
+        text=True
+    )
+    
+    return {
+        "sys_executable": sys.executable,
+        "backend_dir": backend_dir,
+        "parent_dir": parent_dir,
+        "import_status": import_status,
+        "stdout": proc.stdout,
+        "stderr": proc.stderr,
+        "returncode": proc.returncode,
+        "env_pythonpath": env.get("PYTHONPATH")
+    }
+
 # Explicit root / health endpoints
 @app.get("/")
 async def root_endpoint():
