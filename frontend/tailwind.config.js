@@ -1,3 +1,5 @@
+const colors = require('tailwindcss/colors');
+
 /** @type {import('tailwindcss').Config} */
 module.exports = {
   content: [
@@ -8,13 +10,16 @@ module.exports = {
   theme: {
     extend: {
       colors: {
+        indigo: colors.emerald,
+        purple: colors.teal,
+        blue: colors.emerald,
         cyber: {
           slate: "#0f172a",
           dark: "#020617",
-          purple: "#a855f7",
-          blue: "#3b82f6",
+          purple: "#14b8a6", // teal
+          blue: "#10b981", // emerald
           green: "#10b981",
-          gold: "#eab308"
+          gold: "#f59e0b" // orange/gold
         }
       }
     },

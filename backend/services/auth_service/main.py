@@ -1,12 +1,13 @@
 import logging
 import uuid
 from datetime import timedelta
-from fastapi import FastAPI, Depends, HTTPException, status, Request
+from fastapi import FastAPI, Depends, HTTPException, status, Request, Query
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, or_
 from jose import JWTError, jwt
+from typing import Optional
 
 from backend.services.auth_service.config import settings
 from backend.services.auth_service.database import get_db, Base, engine
@@ -24,7 +25,10 @@ from backend.services.auth_service.schemas import (
     UserResponse,
     Token,
     TokenPayload,
-    AuditLogResponse
+    AuditLogResponse,
+    RoleUpdate,
+    StatusUpdate,
+    RefreshTokenRequest
 )
 
 # Logging Setup
@@ -83,7 +87,8 @@ async def seed_users():
                     email=du["email"],
                     hashed_password=get_password_hash(du["password"]),
                     full_name=du["full_name"],
-                    role=du["role"]
+                    role=du["role"],
+                    is_active=True
                 )
                 db.add(user)
             await db.commit()
@@ -119,13 +124,14 @@ async def register(user_in: UserCreate, request: Request, db: AsyncSession = Dep
             detail="User with this email already registered"
         )
     
-    # Hash password and create user
+    # Hash password and create user — ALWAYS force viewer role for self-registration
     hashed_pwd = get_password_hash(user_in.password)
     user = User(
         email=user_in.email,
         hashed_password=hashed_pwd,
         full_name=user_in.full_name,
-        role=user_in.role
+        role="viewer",  # Security: always viewer, ignore client-sent role
+        is_active=True
     )
     
     db.add(user)
@@ -157,6 +163,13 @@ async def login(user_in: UserLogin, request: Request, db: AsyncSession = Depends
             detail="Incorrect email or password"
         )
     
+    # Check if user account is active
+    if hasattr(user, 'is_active') and not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Account has been deactivated. Contact your administrator."
+        )
+    
     # Generate JWT Tokens
     access_token = create_access_token(
         data={"sub": str(user.id), "email": user.email, "role": user.role}
@@ -180,11 +193,11 @@ async def login(user_in: UserLogin, request: Request, db: AsyncSession = Depends
         "token_type": "bearer"
     }
 
-# Refresh Token Endpoint
+# Refresh Token Endpoint (Fixed: uses JSON body instead of query param)
 @app.post(f"{settings.API_V1_STR}/refresh", response_model=Token)
-async def refresh_token(refresh_tok: str, db: AsyncSession = Depends(get_db)):
+async def refresh_token(body: RefreshTokenRequest, db: AsyncSession = Depends(get_db)):
     try:
-        payload = jwt.decode(refresh_tok, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        payload = jwt.decode(body.refresh_token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
         user_id = payload.get("sub")
         token_type = payload.get("type")
         if not user_id or token_type != "refresh":
@@ -247,12 +260,137 @@ async def get_current_user(
         )
     return user
 
+# Require super_admin role
+async def require_super_admin(current_user: User = Depends(get_current_user)) -> User:
+    if current_user.role != "super_admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Super Admin access required"
+        )
+    return current_user
+
 # Get Me Profile Endpoint
 @app.get(f"{settings.API_V1_STR}/me", response_model=UserResponse)
 async def get_profile(current_user: User = Depends(get_current_user)):
     return current_user
 
-# Audit Logs Endpoint
+# ─────────────────────────────────────────────────────────────
+# USER MANAGEMENT ENDPOINTS (Super Admin Only)
+# ─────────────────────────────────────────────────────────────
+
+# List all users with optional search
+@app.get(f"{settings.API_V1_STR}/users", response_model=list[UserResponse])
+async def list_users(
+    search: Optional[str] = Query(None),
+    role: Optional[str] = Query(None),
+    current_user: User = Depends(require_super_admin),
+    db: AsyncSession = Depends(get_db)
+):
+    stmt = select(User)
+    if search:
+        stmt = stmt.where(
+            or_(
+                User.email.ilike(f"%{search}%"),
+                User.full_name.ilike(f"%{search}%")
+            )
+        )
+    if role:
+        stmt = stmt.where(User.role == role)
+    stmt = stmt.order_by(User.created_at.desc())
+    result = await db.execute(stmt)
+    return result.scalars().all()
+
+# Update user role
+@app.put(f"{settings.API_V1_STR}/users/{{user_id}}/role")
+async def update_user_role(
+    user_id: str,
+    body: RoleUpdate,
+    request: Request,
+    current_user: User = Depends(require_super_admin),
+    db: AsyncSession = Depends(get_db)
+):
+    valid_roles = ["viewer", "analyst", "admin", "super_admin"]
+    if body.role not in valid_roles:
+        raise HTTPException(status_code=400, detail=f"Invalid role. Must be one of: {valid_roles}")
+    
+    stmt = select(User).where(User.id == uuid.UUID(user_id))
+    result = await db.execute(stmt)
+    user = result.scalars().first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    old_role = user.role
+    user.role = body.role
+    await db.commit()
+    
+    await write_audit_log(
+        db, current_user.id, "ROLE_CHANGE",
+        f"Changed role for {user.email}: {old_role} → {body.role}",
+        request
+    )
+    
+    return {"status": "success", "email": user.email, "old_role": old_role, "new_role": body.role}
+
+# Activate / deactivate user
+@app.put(f"{settings.API_V1_STR}/users/{{user_id}}/status")
+async def update_user_status(
+    user_id: str,
+    body: StatusUpdate,
+    request: Request,
+    current_user: User = Depends(require_super_admin),
+    db: AsyncSession = Depends(get_db)
+):
+    stmt = select(User).where(User.id == uuid.UUID(user_id))
+    result = await db.execute(stmt)
+    user = result.scalars().first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    user.is_active = body.is_active
+    await db.commit()
+    
+    action = "ACTIVATE" if body.is_active else "DEACTIVATE"
+    await write_audit_log(
+        db, current_user.id, action,
+        f"{action}d user account: {user.email}",
+        request
+    )
+    
+    return {"status": "success", "email": user.email, "is_active": body.is_active}
+
+# Delete user
+@app.delete(f"{settings.API_V1_STR}/users/{{user_id}}")
+async def delete_user(
+    user_id: str,
+    request: Request,
+    current_user: User = Depends(require_super_admin),
+    db: AsyncSession = Depends(get_db)
+):
+    stmt = select(User).where(User.id == uuid.UUID(user_id))
+    result = await db.execute(stmt)
+    user = result.scalars().first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    if str(user.id) == str(current_user.id):
+        raise HTTPException(status_code=400, detail="Cannot delete your own account")
+    
+    email = user.email
+    await db.delete(user)
+    await db.commit()
+    
+    await write_audit_log(
+        db, current_user.id, "DELETE_USER",
+        f"Deleted user account: {email}",
+        request
+    )
+    
+    return {"status": "deleted", "email": email}
+
+# ─────────────────────────────────────────────────────────────
+# AUDIT LOGS
+# ─────────────────────────────────────────────────────────────
+
 @app.get(f"{settings.API_V1_STR}/audit", response_model=list[AuditLogResponse])
 async def get_audits(
     current_user: User = Depends(get_current_user),

@@ -15,6 +15,7 @@ class User(Base):
     full_name = Column(String(255), nullable=True)
     role = Column(String(50), nullable=False, default="viewer") # super_admin, admin, analyst, viewer
     mfa_secret = Column(String(100), nullable=True)
+    is_active = Column(Boolean, default=True)
     is_mfa_enabled = Column(Boolean, default=False)
     sso_provider = Column(String(50), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())

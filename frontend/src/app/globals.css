@@ -5,17 +5,25 @@
 /* ── Leaflet CSS ──────────────────────────────────── */
 @import "leaflet/dist/leaflet.css";
 
-/* ── Design Tokens ───────────────────────────────── */
+/* ── Design Tokens — Emerald Enterprise Theme ─────── */
 :root {
-  /* Brand palette */
-  --bios-50:  #EEF2FF;
-  --bios-100: #E0E7FF;
-  --bios-200: #C7D2FE;
-  --bios-400: #818CF8;
-  --bios-500: #6366F1;
-  --bios-600: #4F46E5;
-  --bios-700: #4338CA;
-  --bios-900: #312E81;
+  /* Primary palette — Emerald */
+  --bios-50:  #ECFDF5;
+  --bios-100: #D1FAE5;
+  --bios-200: #A7F3D0;
+  --bios-400: #34D399;
+  --bios-500: #10B981;
+  --bios-600: #059669;
+  --bios-700: #047857;
+  --bios-900: #064E3B;
+
+  /* Secondary — Teal */
+  --teal-500: #14B8A6;
+  --teal-600: #0D9488;
+
+  /* Accent — Orange */
+  --accent-500: #F59E0B;
+  --accent-600: #D97706;
 
   /* Surface palette */
   --surface-bg:      #F8FAFC;
@@ -25,10 +33,10 @@
   --surface-border:  #E2E8F0;
 
   /* Text */
-  --text-primary:   #0F172A;
+  --text-primary:   #1F2937;
   --text-secondary: #475569;
   --text-muted:     #94A3B8;
-  --text-accent:    #4F46E5;
+  --text-accent:    #059669;
 
   /* Status */
   --green:  #10B981;
@@ -45,10 +53,10 @@
 
   /* Shadows */
   --shadow-xs: 0 1px 2px 0 rgb(0 0 0 / 0.05);
-  --shadow-sm: 0 1px 3px 0 rgb(0 0 0 / 0.08), 0 1px 2px -1px rgb(0 0 0 / 0.04);
-  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.07), 0 2px 4px -2px rgb(0 0 0 / 0.05);
-  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.07), 0 4px 6px -4px rgb(0 0 0 / 0.04);
-  --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.07), 0 8px 10px -6px rgb(0 0 0 / 0.04);
+  --shadow-sm: 0 1px 3px 0 rgb(0 0 0 / 0.06), 0 1px 2px -1px rgb(0 0 0 / 0.03);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.06), 0 2px 4px -2px rgb(0 0 0 / 0.04);
+  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.06), 0 4px 6px -4px rgb(0 0 0 / 0.03);
+  --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.06), 0 8px 10px -6px rgb(0 0 0 / 0.03);
 }
 
 /* ── Base Reset ──────────────────────────────────── */
@@ -92,7 +100,7 @@ body {
 .bios-card-interactive:hover {
   transform: translateY(-1px);
   box-shadow: var(--shadow-lg);
-  border-color: var(--bios-300);
+  border-color: var(--bios-400);
 }
 
 /* ── Glassmorphism (Light) ───────────────────────── */
@@ -115,7 +123,7 @@ body {
 
 .glass-card:hover {
   border-color: var(--bios-200);
-  box-shadow: 0 8px 20px -4px rgba(79, 70, 229, 0.10);
+  box-shadow: 0 8px 20px -4px rgba(16, 185, 129, 0.10);
 }
 
 /* ── Sidebar ─────────────────────────────────────── */
@@ -136,12 +144,12 @@ body {
   font-size: 0.875rem;
   cursor: pointer;
   transition: background 0.15s ease, box-shadow 0.15s ease, transform 0.1s ease;
-  box-shadow: 0 1px 2px 0 rgba(79, 70, 229, 0.25);
+  box-shadow: 0 1px 2px 0 rgba(5, 150, 105, 0.25);
 }
 
 .btn-primary:hover {
   background: var(--bios-700);
-  box-shadow: 0 4px 12px 0 rgba(79, 70, 229, 0.3);
+  box-shadow: 0 4px 12px 0 rgba(5, 150, 105, 0.3);
   transform: translateY(-1px);
 }
 
@@ -182,7 +190,7 @@ body {
 
 .bios-input:focus {
   border-color: var(--bios-500);
-  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.12);
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.12);
 }
 
 .bios-input::placeholder {
@@ -210,7 +218,7 @@ body {
 
 /* ── Leaflet Map Overrides ───────────────────────── */
 .leaflet-container {
-  background: #EFF6FF !important;
+  background: #F0FDF4 !important;
   border-radius: var(--radius-xl);
   border: 1px solid var(--surface-border);
 }
@@ -331,7 +339,7 @@ body {
 
 /* ── Auth Page ───────────────────────────────────── */
 .auth-surface {
-  background: linear-gradient(135deg, #F0F4FF 0%, #E8EEFF 50%, #F5F3FF 100%);
+  background: linear-gradient(135deg, #ECFDF5 0%, #D1FAE5 50%, #F0FDF4 100%);
   min-height: 100vh;
   display: flex;
   align-items: center;
@@ -377,7 +385,7 @@ body {
 .progress-fill {
   height: 100%;
   border-radius: 999px;
-  background: linear-gradient(90deg, var(--bios-500), var(--bios-400));
+  background: linear-gradient(90deg, var(--bios-500), var(--teal-500));
   transition: width 0.5s ease;
 }
 
@@ -431,4 +439,70 @@ body {
 
 .nav-item.active .nav-icon {
   color: var(--bios-600);
+}
+
+/* ── Print Styles (PDF Export) ───────────────────── */
+@media print {
+  html, body, main, div, section {
+    background: white !important;
+    color: black !important;
+    height: auto !important;
+    overflow: visible !important;
+    display: block !important;
+    position: static !important;
+  }
+  .no-print, nav, header, button, .no-print-btn, .bios-toast {
+    display: none !important;
+  }
+  .print-card {
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+}
+
+/* ── Mobile Responsive ───────────────────────────── */
+@media (max-width: 768px) {
+  .mobile-sidebar-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 45;
+    background: rgba(15, 23, 42, 0.4);
+    backdrop-filter: blur(2px);
+  }
+
+  .mobile-sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: 280px;
+    z-index: 50;
+    background: white;
+    border-right: 1px solid var(--surface-border);
+    box-shadow: var(--shadow-xl);
+    transform: translateX(-100%);
+    transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .mobile-sidebar.open {
+    transform: translateX(0);
+  }
+
+  .bios-table {
+    font-size: 0.75rem;
+  }
+
+  .bios-table th,
+  .bios-table td {
+    padding: 0.5rem 0.625rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .auth-card {
+    padding: 1.5rem;
+    margin: 0 0.75rem;
+  }
 }

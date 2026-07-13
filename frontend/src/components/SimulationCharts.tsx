@@ -118,7 +118,7 @@ export default function SimulationCharts({ scenario, horizon, businessName, simu
         <div className="glass-card bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm">
           <div className="flex justify-between items-center mb-4">
             <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Revenue Forecast Horizon</h4>
-            <span className="text-[10px] bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded font-mono font-bold">Est ($ Millions)</span>
+            <span className="text-[10px] bg-emerald-50 text-emerald-600 px-2 py-0.5 rounded font-mono font-bold">Est ($ Millions)</span>
           </div>
 
           <div className="w-full h-[260px]">
@@ -126,12 +126,12 @@ export default function SimulationCharts({ scenario, horizon, businessName, simu
               <AreaChart data={chartData} margin={{ top: 10, right: 5, left: -25, bottom: 0 }}>
                 <defs>
                   <linearGradient id="colorRev" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#4F46E5" stopOpacity={0.2}/>
-                    <stop offset="95%" stopColor="#4F46E5" stopOpacity={0.01}/>
+                    <stop offset="5%" stopColor="#10B981" stopOpacity={0.2}/>
+                    <stop offset="95%" stopColor="#10B981" stopOpacity={0.01}/>
                   </linearGradient>
                   <linearGradient id="colorCone" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#818CF8" stopOpacity={0.1}/>
-                    <stop offset="95%" stopColor="#818CF8" stopOpacity={0.001}/>
+                    <stop offset="5%" stopColor="#14B8A6" stopOpacity={0.1}/>
+                    <stop offset="95%" stopColor="#14B8A6" stopOpacity={0.001}/>
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" />
@@ -160,7 +160,7 @@ export default function SimulationCharts({ scenario, horizon, businessName, simu
                 <Area 
                   type="monotone" 
                   dataKey="Revenue" 
-                  stroke="#4F46E5" 
+                  stroke="#10B981" 
                   strokeWidth={2.5} 
                   fillOpacity={1} 
                   fill="url(#colorRev)" 
@@ -204,7 +204,7 @@ export default function SimulationCharts({ scenario, horizon, businessName, simu
       </div>
 
       {/* Child-friendly explanation overlay */}
-      <div className="bg-indigo-50/60 border border-indigo-100 rounded-2xl p-5 flex items-start space-x-3.5 shadow-sm">
+      <div className="bg-teal-50/60 border border-teal-100 rounded-2xl p-5 flex items-start space-x-3.5 shadow-sm">
         <div className="text-xl">💡</div>
         <div>
           <h4 className="font-bold text-slate-800 text-sm mb-1">Simple Explanation: &ldquo;{scenario.replace('_', ' ').toUpperCase()}&rdquo;</h4>

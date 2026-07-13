@@ -6,7 +6,7 @@ const L = typeof window !== 'undefined' ? require('leaflet') : null;
 import { Globe } from 'lucide-react';
 import { SEED_COMPANIES, SeedCompany } from '../lib/seed_data';
 
-// Continent coordinates and names (Correctly spelled)
+// Continent coordinates and names (Correctly spelled in English)
 const CONTINENTS = [
   { name: "AFRICA", coords: [0.0, 20.0] },
   { name: "EUROPE", coords: [50.0, 15.0] },
@@ -16,6 +16,23 @@ const CONTINENTS = [
   { name: "AUSTRALIA", coords: [-25.0, 135.0] },
   { name: "ANTARCTICA", coords: [-75.0, 0.0] }
 ];
+
+// Major ocean and country English label mappings
+const REGIONS = [
+  { name: "NORTH ATLANTIC OCEAN", coords: [30.0, -40.0], type: "ocean" },
+  { name: "SOUTH ATLANTIC OCEAN", coords: [-30.0, -15.0], type: "ocean" },
+  { name: "PACIFIC OCEAN", coords: [0.0, -140.0], type: "ocean" },
+  { name: "INDIAN OCEAN", coords: [-20.0, 80.0], type: "ocean" },
+  { name: "UNITED STATES", coords: [38.0, -97.0], type: "country" },
+  { name: "CHINA", coords: [35.0, 105.0], type: "country" },
+  { name: "GERMANY", coords: [51.0, 9.0], type: "country" },
+  { name: "INDIA", coords: [20.0, 78.0], type: "country" },
+  { name: "UNITED KINGDOM", coords: [55.0, -3.0], type: "country" },
+  { name: "JAPAN", coords: [36.0, 138.0], type: "country" },
+  { name: "BRAZIL", coords: [-10.0, -53.0], type: "country" },
+  { name: "SOUTH AFRICA", coords: [-30.0, 25.0], type: "country" }
+];
+
 
 // Helper to generate hundreds of small glowing nodes
 const generateScatterNodes = () => {
@@ -129,8 +146,8 @@ export default function PlanetaryMap({ onSelectBusiness, selectedId, businesses 
       });
       mapRef.current = mapInstance;
 
-      // Carto light-themed tile layer with ENGLISH labels
-      L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
+      // Carto light-themed tile layer (no labels)
+      L.tileLayer("https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png", {
         attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
       }).addTo(mapInstance);
 
@@ -191,7 +208,7 @@ export default function PlanetaryMap({ onSelectBusiness, selectedId, businesses 
 
   // Helper to determine marker category color & icon based on relationship to selected company
   const getMarkerOptions = (biz: any, isSelected: boolean) => {
-    let color = "#3B82F6"; // default blue (Nearby)
+    let color = "#0D9488"; // default dark teal (Nearby)
     let symbol = "🏢";
     let typeName = "Entity / Office";
 
@@ -204,9 +221,9 @@ export default function PlanetaryMap({ onSelectBusiness, selectedId, businesses 
 
     if (selectedBiz) {
       const name = biz.name;
-      // Core Supplier -> purple
+      // Core Supplier -> teal
       if (selectedBiz.suppliers?.some((s: string) => s.includes(name) || name.includes(s))) {
-        color = "#8B5CF6"; // purple
+        color = "#14B8A6"; // teal
         symbol = "📦";
         typeName = "Core Supplier";
       } 
@@ -235,7 +252,7 @@ export default function PlanetaryMap({ onSelectBusiness, selectedId, businesses 
     markersRef.current.clearLayers();
     connectionsRef.current.clearLayers();
 
-    // 1. Draw continent labels with correct spelling (AFRICA, EUROPE, ASIA etc.)
+    // 1. Draw custom English continent and region/ocean labels
     CONTINENTS.forEach((cont) => {
       L.marker(cont.coords as L.LatLngExpression, {
         icon: L.divIcon({
@@ -248,68 +265,89 @@ export default function PlanetaryMap({ onSelectBusiness, selectedId, businesses 
       }).addTo(connectionsRef.current!);
     });
 
-    // 3. Render markers & connections (only selectedBiz and its ecosystem)
+    REGIONS.forEach((reg) => {
+      const isOcean = reg.type === "ocean";
+      const fontClass = isOcean 
+        ? "text-slate-300/80 italic font-medium tracking-widest text-[9px]" 
+        : "text-slate-400/70 font-semibold tracking-wider text-[8px]";
+      
+      L.marker(reg.coords as L.LatLngExpression, {
+        icon: L.divIcon({
+          className: isOcean ? 'custom-leaflet-ocean-label' : 'custom-leaflet-country-label',
+          html: `<div class="${fontClass} select-none pointer-events-none uppercase whitespace-nowrap">${reg.name}</div>`,
+          iconSize: [150, 20],
+          iconAnchor: [75, 10]
+        }),
+        zIndexOffset: -120
+      }).addTo(connectionsRef.current!);
+    });
+
+    // 2. Render markers & connections (only selectedBiz and its ecosystem, or ALL businesses if none is selected)
     const displayMarkers: any[] = [];
     const selectedCoords = getCoords(selectedBiz);
+
     if (selectedBiz && selectedCoords) {
       displayMarkers.push(selectedBiz);
+
+      // Get connected businesses
+      const connectedBusinesses = activeBusinesses.filter((biz) => {
+        if (biz.id === selectedBiz.id) return false;
+        const coords = getCoords(biz);
+        if (!coords) return false;
+        
+        const { typeName } = getMarkerOptions(biz, false);
+        return typeName === "Core Supplier" || typeName === "Market Competitor" || typeName === "Strategic Partner";
+      });
+
+      displayMarkers.push(...connectedBusinesses);
+
+      // Draw relationship flows (lines connect exactly to marker center points)
+      connectedBusinesses.forEach((biz) => {
+        const { color, symbol, typeName } = getMarkerOptions(biz, false);
+        const isCompetitor = typeName === "Market Competitor";
+        const targetCoords = getCoords(biz);
+        if (!selectedCoords || !targetCoords) return;
+        
+        // Draw center-bound line connecting exactly to marker anchors
+        L.polyline([selectedCoords, targetCoords], {
+          color: color,
+          weight: 2.2,
+          opacity: 0.75,
+          dashArray: isCompetitor ? '4, 4' : undefined
+        }).addTo(connectionsRef.current!);
+
+        // Draw mid-line direction badge with distance & travel time
+        const midLat = (selectedCoords[0] + targetCoords[0]) / 2;
+        const midLng = (selectedCoords[1] + targetCoords[1]) / 2;
+        const dist = L.latLng(selectedCoords).distanceTo(L.latLng(targetCoords));
+        const distKm = Math.round(dist / 1000);
+        const isAir = distKm > 2500;
+        const speed = isAir ? 850 : 50; 
+        const travelHrs = Math.round((distKm / speed) * 10) / 10;
+
+        L.marker([midLat, midLng] as L.LatLngExpression, {
+          icon: L.divIcon({
+            className: 'custom-leaflet-line-badge',
+            html: `
+              <div class="bg-slate-900 text-white border border-slate-700/80 px-2 py-0.5 rounded text-[8px] font-bold shadow-md flex items-center space-x-1 whitespace-nowrap">
+                <span>${isAir ? '✈️' : '🚢'} ${distKm}km</span>
+                <span class="text-indigo-300 font-mono">(${travelHrs}h)</span>
+              </div>
+            `,
+            iconSize: [85, 18],
+            iconAnchor: [42, 9]
+          })
+        }).addTo(connectionsRef.current!);
+      });
+    } else {
+      // If no business selected, display ALL active businesses on the map
+      activeBusinesses.forEach((biz) => {
+        const coords = getCoords(biz);
+        if (coords) {
+          displayMarkers.push(biz);
+        }
+      });
     }
-
-    // If selected business coordinate is invalid, do not display markers
-    if (displayMarkers.length === 0) {
-      return;
-    }
-
-    // Get connected businesses
-    const connectedBusinesses = activeBusinesses.filter((biz) => {
-      if (biz.id === selectedBiz.id) return false;
-      const coords = getCoords(biz);
-      if (!coords) return false;
-      
-      const { typeName } = getMarkerOptions(biz, false);
-      return typeName === "Core Supplier" || typeName === "Market Competitor" || typeName === "Strategic Partner";
-    });
-
-    displayMarkers.push(...connectedBusinesses);
-
-    // 4. Draw relationship flows (lines connect exactly to marker center points)
-    connectedBusinesses.forEach((biz) => {
-      const { color, symbol, typeName } = getMarkerOptions(biz, false);
-      const isCompetitor = typeName === "Market Competitor";
-      const targetCoords = getCoords(biz);
-      if (!selectedCoords || !targetCoords) return;
-      
-      // Draw center-bound line connecting exactly to marker anchors
-      L.polyline([selectedCoords, targetCoords], {
-        color: color,
-        weight: 2.2,
-        opacity: 0.75,
-        dashArray: isCompetitor ? '4, 4' : undefined
-      }).addTo(connectionsRef.current!);
-
-      // Draw mid-line direction badge with distance & travel time
-      const midLat = (selectedCoords[0] + targetCoords[0]) / 2;
-      const midLng = (selectedCoords[1] + targetCoords[1]) / 2;
-      const dist = L.latLng(selectedCoords).distanceTo(L.latLng(targetCoords));
-      const distKm = Math.round(dist / 1000);
-      const isAir = distKm > 2500;
-      const speed = isAir ? 850 : 50; 
-      const travelHrs = Math.round((distKm / speed) * 10) / 10;
-
-      L.marker([midLat, midLng] as L.LatLngExpression, {
-        icon: L.divIcon({
-          className: 'custom-leaflet-line-badge',
-          html: `
-            <div class="bg-slate-900 text-white border border-slate-700/80 px-2 py-0.5 rounded text-[8px] font-bold shadow-md flex items-center space-x-1 whitespace-nowrap">
-              <span>${isAir ? '✈️' : '🚢'} ${distKm}km</span>
-              <span class="text-indigo-300 font-mono">(${travelHrs}h)</span>
-            </div>
-          `,
-          iconSize: [85, 18],
-          iconAnchor: [42, 9]
-        })
-      }).addTo(connectionsRef.current!);
-    });
 
     // 5. Render markers
     displayMarkers.forEach((biz) => {
@@ -390,24 +428,18 @@ export default function PlanetaryMap({ onSelectBusiness, selectedId, businesses 
         .leaflet-tooltip-top.custom-permanent-tooltip::before {
           border-top-color: #0f172a !important;
         }
+        .custom-leaflet-continent-label,
+        .custom-leaflet-ocean-label,
+        .custom-leaflet-country-label {
+          background: transparent !important;
+          border: none !important;
+          box-shadow: none !important;
+        }
       `}</style>
 
       {/* MAP VIEWER PORT (3 Cols) */}
       <div className="xl:col-span-3 rounded-3xl overflow-hidden border border-slate-200/80 bg-slate-50 relative h-full shadow-inner">
         <div ref={containerRef} style={{ width: '100%', height: '100%' }} />
-
-        {/* Message Overlay if no company selected */}
-        {!selectedId && (
-          <div className="absolute inset-0 z-[1000] bg-slate-900/40 backdrop-blur-[2px] flex items-center justify-center pointer-events-none select-none">
-            <div className="bg-white/95 border border-slate-200/80 px-6 py-4 rounded-2xl shadow-2xl max-w-sm text-center space-y-2 pointer-events-auto">
-              <Globe className="w-8 h-8 text-indigo-500 animate-pulse mx-auto" />
-              <h4 className="text-xs font-extrabold text-slate-800">Planetary Digital Twin Grid</h4>
-              <p className="text-[11px] text-slate-500 font-medium leading-relaxed">
-                Search for a company, country, or industry to view its Digital Twin.
-              </p>
-            </div>
-          </div>
-        )}
 
         {/* Floating Legend Panel */}
         <div className="absolute bottom-4 left-4 z-[999] bg-white/95 backdrop-blur-md border border-slate-200/80 px-4 py-3 rounded-xl shadow-lg pointer-events-none max-w-xs transition select-none text-[10px]">
@@ -532,9 +564,9 @@ export default function PlanetaryMap({ onSelectBusiness, selectedId, businesses 
 
           </div>
         ) : (
-          <div className="flex flex-col items-center justify-center h-full text-center p-4">
-            <Globe className="w-10 h-10 text-slate-300 animate-bounce mb-3" />
-            <p className="text-xs text-slate-400 font-medium">Please search or scan a company twin to begin detailed planetary mapping.</p>
+          <div className="flex flex-col items-center justify-center h-full text-center p-6 bg-slate-50 border border-slate-100 rounded-2xl">
+            <Globe className="w-10 h-10 text-slate-300 animate-pulse mb-3" />
+            <p className="text-xs text-slate-400 font-medium">Select a business to view its Digital Twin.</p>
           </div>
         )}
       </div>

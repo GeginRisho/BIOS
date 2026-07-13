@@ -8,7 +8,7 @@ class UserCreate(BaseModel):
     email: EmailStr
     password: str = Field(..., min_length=8, max_length=100)
     full_name: Optional[str] = None
-    role: Optional[str] = "viewer" # default registration defaults to viewer
+    role: Optional[str] = "viewer" # ignored by backend, always forced to viewer
 
 # User Login Schema
 class UserLogin(BaseModel):
@@ -34,6 +34,7 @@ class UserResponse(BaseModel):
     email: EmailStr
     full_name: Optional[str] = None
     role: str
+    is_active: bool = True
     is_mfa_enabled: bool
     created_at: datetime
 
@@ -50,3 +51,14 @@ class AuditLogResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+# ── User Management Schemas ──────────────────────────────────
+
+class RoleUpdate(BaseModel):
+    role: str = Field(..., description="One of: viewer, analyst, admin, super_admin")
+
+class StatusUpdate(BaseModel):
+    is_active: bool
+
+class RefreshTokenRequest(BaseModel):
+    refresh_token: str
