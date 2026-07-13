@@ -97,10 +97,14 @@ const POPULAR_SEARCHES = [
 ];
 
 const getServiceUrl = (port: number, path: string): string => {
-  const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-  const cleanBase = baseUrl.replace(/\/$/, "");
+  const baseUrl = process.env.NEXT_PUBLIC_API_URL;
+  if (baseUrl) {
+    const cleanBase = baseUrl.replace(/\/$/, "");
+    const cleanPath = path.replace(/^\//, "");
+    return `${cleanBase}/${cleanPath}`;
+  }
   const cleanPath = path.replace(/^\//, "");
-  return `${cleanBase}/${cleanPath}`;
+  return `http://127.0.0.1:${port}/${cleanPath}`;
 };
 
 export default function BIOSDashboard() {
@@ -115,7 +119,7 @@ export default function BIOSDashboard() {
   } = useBIOSStore();
 
   // Auth Screen states
-  const [authTab, setAuthTab] = useState<'login' | 'forgot' | 'reset' | 'verify' | 'session_expired'>('login');
+  const [authTab, setAuthTab] = useState<'login' | 'register' | 'forgot' | 'reset' | 'verify' | 'session_expired'>('login');
   const [authEmail, setAuthEmail] = useState('');
   const [authPassword, setAuthPassword] = useState('');
   const [authRole, setAuthRole] = useState('viewer');
@@ -426,8 +430,10 @@ export default function BIOSDashboard() {
   useEffect(() => {
     if (!user || !user.token) return;
     
-    const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-    const wsUrl = baseUrl.replace(/^http/, 'ws').replace(/\/$/, '') + '/api/v1/notifications/ws';
+    const baseUrl = process.env.NEXT_PUBLIC_API_URL;
+    const wsUrl = baseUrl
+      ? baseUrl.replace(/^http/, 'ws').replace(/\/$/, '') + '/api/v1/notifications/ws'
+      : 'ws://127.0.0.1:8011/api/v1/notifications/ws';
     
     let socket: WebSocket | null = null;
     let reconnectTimeout: any = null;
@@ -1583,10 +1589,10 @@ export default function BIOSDashboard() {
             {showNotifDropdown && (
               <>
                 <div 
-                  className="fixed inset-0 z-40 bg-transparent cursor-default" 
+                  className="fixed inset-0 z-[899] bg-transparent cursor-default" 
                   onClick={() => setShowNotifDropdown(false)}
                 />
-                <div className="absolute right-0 mt-2 w-80 bg-white border border-slate-200/90 rounded-2xl shadow-xl z-50 p-4 space-y-3 animate-in fade-in slide-in-from-top-2 duration-150 text-left">
+                <div className="fixed sm:absolute right-4 sm:right-0 left-4 sm:left-auto mt-2 sm:w-80 bg-white border border-slate-200/90 rounded-2xl shadow-xl z-[900] p-4 space-y-3 animate-in fade-in slide-in-from-top-2 duration-150 text-left">
                   <div className="flex justify-between items-center pb-2 border-b border-slate-100">
                     <span className="text-[10px] uppercase font-bold tracking-widest text-slate-400 font-mono">Recent Notifications</span>
                     <button 
@@ -1645,12 +1651,12 @@ export default function BIOSDashboard() {
           <>
             {/* Dark Blur Backdrop Overlay */}
             <div 
-              className="fixed inset-0 bg-black/45 backdrop-blur-md z-[50] xl:hidden animate-in fade-in duration-200"
+              className="fixed inset-0 bg-black/45 backdrop-blur-md z-[1000] xl:hidden animate-in fade-in duration-200"
               onClick={() => setMobileMenuOpen(false)}
             />
             {/* Drawer (Width: 300px) */}
             <div 
-              className="fixed left-0 top-0 bottom-0 w-[300px] bg-white p-5 flex flex-col justify-between shadow-2xl animate-in slide-in-from-left duration-250 z-[60] xl:hidden overflow-y-auto"
+              className="fixed left-0 top-0 bottom-0 w-[300px] bg-white p-5 flex flex-col justify-between shadow-2xl animate-in slide-in-from-left duration-250 z-[1010] xl:hidden overflow-y-auto"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="space-y-6">
@@ -1702,7 +1708,7 @@ export default function BIOSDashboard() {
                           setActiveView(item.key);
                           setMobileMenuOpen(false);
                         }}
-                        className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl text-xs font-bold tracking-tight transition ${
+                        className={`w-full flex items-center space-x-3 px-3 h-11 rounded-xl text-xs font-bold tracking-tight transition ${
                           isActive 
                             ? 'bg-indigo-50 text-indigo-600 border-l-4 border-indigo-600 shadow-xs' 
                             : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'
@@ -1875,7 +1881,7 @@ export default function BIOSDashboard() {
           )}
 
           {/* VIEW: PLANETARY MAP CONTAINER */}
-          <div className={activeView === 'map' ? 'block' : 'hidden'}>
+          <div className={(activeView === 'map' && !mobileMenuOpen) ? 'block' : 'hidden'}>
             <div className="space-y-4 animate-in fade-in duration-200">
               <div className="bg-white rounded-3xl p-5 xl:p-6 border border-slate-200/80 shadow-sm">
                 <div className="mb-4">
@@ -1900,8 +1906,8 @@ export default function BIOSDashboard() {
           </div>
 
           {/* VIEW: KNOWLEDGE RELATIONSHIP GRAPH */}
-          <div className={activeView === 'graph' ? 'block' : 'hidden'}>
-            {activeView === 'graph' && (
+          <div className={(activeView === 'graph' && !mobileMenuOpen) ? 'block' : 'hidden'}>
+            {activeView === 'graph' && !mobileMenuOpen && (
               <div className="space-y-4 animate-in fade-in duration-200">
                 <div className="bg-white rounded-3xl p-5 xl:p-6 border border-slate-200/80 shadow-sm">
                   <div className="mb-4">
@@ -2770,7 +2776,7 @@ export default function BIOSDashboard() {
 
               {/* Add Company Modal Dialog */}
               {showAddModal && (
-                <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-[2.5px] z-50 flex items-center justify-center p-6 animate-in fade-in duration-150">
+                <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-[2.5px] z-[2000] flex items-center justify-center p-6 animate-in fade-in duration-150">
                   <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-2xl max-w-lg w-full space-y-4 max-h-[85vh] overflow-y-auto">
                     <h3 className="font-extrabold text-slate-900 text-sm flex items-center space-x-2">
                       <Plus className="w-5 h-5 text-indigo-500" />
@@ -2958,7 +2964,7 @@ export default function BIOSDashboard() {
 
               {/* Edit Company Modal Dialog */}
               {showEditModal && editingBiz && (
-                <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-[2.5px] z-50 flex items-center justify-center p-6 animate-in fade-in duration-150">
+                <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-[2.5px] z-[2000] flex items-center justify-center p-6 animate-in fade-in duration-150">
                   <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-2xl max-w-lg w-full space-y-4 max-h-[85vh] overflow-y-auto">
                     <h3 className="font-extrabold text-slate-900 text-sm flex items-center space-x-2">
                       <Edit className="w-5 h-5 text-indigo-500" />
@@ -3133,7 +3139,7 @@ export default function BIOSDashboard() {
 
               {/* Bulk upload CSV Modal dialog */}
               {showBulkModal && (
-                <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-[2.5px] z-50 flex items-center justify-center p-6 animate-in fade-in duration-150">
+                <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-[2.5px] z-[2000] flex items-center justify-center p-6 animate-in fade-in duration-150">
                   <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-2xl max-w-md w-full space-y-4">
                     <h3 className="font-extrabold text-slate-900 text-sm flex items-center space-x-2">
                       <FileSpreadsheet className="w-5 h-5 text-indigo-500" />
@@ -3427,7 +3433,7 @@ export default function BIOSDashboard() {
 
               {/* User management Modal Dialog */}
               {showUserModal && (
-                <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-[2.5px] z-50 flex items-center justify-center p-6 animate-in fade-in duration-150">
+                <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-[2.5px] z-[2000] flex items-center justify-center p-6 animate-in fade-in duration-150">
                   <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-2xl max-w-sm w-full space-y-4">
                     <h3 className="font-extrabold text-slate-900 text-sm flex items-center space-x-2">
                       <UserCheck className="w-5 h-5 text-indigo-500" />

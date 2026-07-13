@@ -500,7 +500,7 @@ export default function PlanetaryMap({ onSelectBusiness, selectedId, businesses,
           <p class="text-[10px] text-slate-500"><strong>Risk Score:</strong> ${biz.risk ?? 15}%</p>
         </div>
       `;
-      marker.bindPopup(popupContent);
+      marker.bindPopup(popupContent, { autoPan: true, autoPanPadding: [20, 20], keepInView: true });
 
       marker.on('click', () => {
         setSelectedBiz(biz);

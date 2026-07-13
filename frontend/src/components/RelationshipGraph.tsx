@@ -836,8 +836,8 @@ export default function RelationshipGraph({ businessName, mobileMenuOpen }: Rela
             </div>
           )}
 
-          {/* Floating Canvas controls */}
-          <div className="absolute top-4 left-4 z-10 bg-white/90 backdrop-blur-md border border-slate-200/80 p-1.5 rounded-xl shadow-md flex space-x-1">
+          {/* Floating Canvas controls (Desktop only) */}
+          <div className="absolute top-4 left-4 z-10 bg-white/90 backdrop-blur-md border border-slate-200/80 p-1.5 rounded-xl shadow-md hidden xl:flex space-x-1">
             <button 
               onClick={() => handleZoom(1.2)} 
               className="w-11 h-11 hover:bg-slate-100 rounded-lg text-slate-600 hover:text-slate-900 transition flex items-center justify-center shrink-0" 
@@ -868,42 +868,108 @@ export default function RelationshipGraph({ businessName, mobileMenuOpen }: Rela
             </button>
           </div>
 
-
-          {/* Mobile Floating Action Controls */}
-          <div className="xl:hidden absolute top-4 right-4 z-10 flex space-x-2">
-            <button
-              onClick={() => setShowMobileFilters(true)}
-              className="bg-white/90 backdrop-blur-md border border-slate-200/80 px-3 rounded-xl shadow-md text-slate-700 font-bold text-[10px] flex items-center space-x-1.5 h-11 shrink-0 cursor-pointer"
-            >
-              <Filter className="w-4 h-4 text-emerald-500" />
-              <span>Filters</span>
-            </button>
-          </div>
-
-          {(selectedNode || selectedLink) && (
-            <div className="xl:hidden absolute bottom-4 left-[140px] z-10">
-              <button
-                onClick={() => setShowMobileInspector(true)}
-                className="bg-white/90 backdrop-blur-md border border-slate-200/80 px-3 rounded-xl shadow-md text-slate-700 font-bold text-[10px] flex items-center space-x-1.5 h-11 shrink-0 cursor-pointer"
+          {/* Mobile Top Action Bar */}
+          <div className="xl:hidden absolute top-4 left-4 right-4 z-10 flex justify-between items-center pointer-events-none">
+            <div className="bg-white/90 backdrop-blur-md border border-slate-200/80 p-1.5 rounded-xl shadow-md flex space-x-1 pointer-events-auto">
+              <button 
+                onClick={() => handleZoom(1.2)} 
+                className="w-11 h-11 hover:bg-slate-100 rounded-lg text-slate-600 hover:text-slate-900 transition flex items-center justify-center shrink-0" 
+                title="Zoom In"
               >
-                <Info className="w-4 h-4 text-emerald-500" />
-                <span>Details</span>
+                <ZoomIn className="w-5 h-5" />
+              </button>
+              <button 
+                onClick={() => handleZoom(0.8)} 
+                className="w-11 h-11 hover:bg-slate-100 rounded-lg text-slate-600 hover:text-slate-900 transition flex items-center justify-center shrink-0" 
+                title="Zoom Out"
+              >
+                <ZoomOut className="w-5 h-5" />
+              </button>
+              <button 
+                onClick={handleFitScreen} 
+                className="w-11 h-11 hover:bg-slate-100 rounded-lg text-slate-600 hover:text-slate-900 transition flex items-center justify-center shrink-0" 
+                title="Fit to Screen"
+              >
+                <Maximize className="w-5 h-5" />
               </button>
             </div>
-          )}
 
-          <div className="xl:hidden absolute bottom-4 right-4 z-10">
-            <button
-              onClick={handleReset}
-              className="bg-emerald-600 hover:bg-emerald-700 text-white w-11 h-11 rounded-full shadow-lg transition active:scale-95 flex items-center justify-center shrink-0 cursor-pointer"
-              title="Reset Layout"
-            >
-              <RotateCcw className="w-5 h-5" />
-            </button>
+            <div className="pointer-events-auto">
+              <button
+                onClick={() => setShowMobileFilters(true)}
+                className="bg-white/90 backdrop-blur-md border border-slate-200/80 px-3 rounded-xl shadow-md text-slate-700 font-bold text-[10px] flex items-center space-x-1.5 h-11 shrink-0 cursor-pointer"
+              >
+                <Filter className="w-4 h-4 text-emerald-500" />
+                <span>Filters</span>
+              </button>
+            </div>
           </div>
 
-          {/* Floating Expandable Legend Button for Relationship Graph */}
-          <div className="absolute bottom-4 left-4 xl:left-auto xl:right-4 z-[999] flex flex-col items-start xl:items-end select-none">
+          {/* Mobile Bottom Action Bar */}
+          <div className="xl:hidden absolute bottom-4 left-4 right-4 z-10 flex justify-between items-center pointer-events-none">
+            <div className="flex items-end select-none pointer-events-auto relative">
+              {showLegend && (
+                <div className="absolute bottom-full left-0 mb-2 bg-white/95 backdrop-blur-md border border-slate-200/80 px-3.5 py-2.5 rounded-2xl shadow-md text-[9px] space-y-1.5 animate-in slide-in-from-bottom-2 duration-150 w-48">
+                  <span className="font-bold text-slate-400 uppercase tracking-wider block font-mono">Legend</span>
+                  <div className="grid grid-cols-1 gap-y-1 text-slate-600 font-semibold">
+                    <div className="flex items-center space-x-1.5">
+                      <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block"></span>
+                      <span>Main Twin (HQ)</span>
+                    </div>
+                    <div className="flex items-center space-x-1.5">
+                      <span className="w-2.5 h-2.5 rounded-full bg-teal-500 inline-block"></span>
+                      <span>Partners (Teal)</span>
+                    </div>
+                    <div className="flex items-center space-x-1.5">
+                      <span className="w-2.5 h-2.5 rounded-full bg-amber-500 inline-block"></span>
+                      <span>Competitors</span>
+                    </div>
+                    <div className="flex items-center space-x-1.5">
+                      <span className="w-2.5 h-2.5 rounded-full bg-indigo-500 inline-block"></span>
+                      <span>Suppliers</span>
+                    </div>
+                    <div className="flex items-center space-x-1.5">
+                      <span className="w-2.5 h-2.5 rounded-full bg-blue-500 inline-block"></span>
+                      <span>Subsidiaries</span>
+                    </div>
+                    <div className="flex items-center space-x-1.5">
+                      <span className="w-2.5 h-2.5 rounded-full bg-slate-500 inline-block"></span>
+                      <span>Parent Co</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+              <button 
+                onClick={() => setShowLegend(!showLegend)}
+                className="bg-white hover:bg-slate-50 border border-slate-200/80 rounded-xl shadow-md text-slate-600 hover:text-slate-900 transition flex items-center justify-center space-x-1 text-[10px] font-bold h-11 px-3 cursor-pointer"
+              >
+                <span>🗺️</span>
+                <span>{showLegend ? 'Hide' : 'Legend'}</span>
+              </button>
+            </div>
+
+            <div className="flex space-x-2 pointer-events-auto">
+              {(selectedNode || selectedLink) && (
+                <button
+                  onClick={() => setShowMobileInspector(true)}
+                  className="bg-white/90 backdrop-blur-md border border-slate-200/80 px-3 rounded-xl shadow-md text-slate-700 font-bold text-[10px] flex items-center space-x-1.5 h-11 cursor-pointer"
+                >
+                  <Info className="w-4 h-4 text-emerald-500" />
+                  <span>Details</span>
+                </button>
+              )}
+              <button
+                onClick={handleReset}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white w-11 h-11 rounded-full shadow-lg transition active:scale-95 flex items-center justify-center cursor-pointer"
+                title="Reset Layout"
+              >
+                <RotateCcw className="w-5 h-5" />
+              </button>
+            </div>
+          </div>
+
+          {/* Floating Expandable Legend Button for Relationship Graph (Desktop only) */}
+          <div className="absolute bottom-4 left-4 xl:left-auto xl:right-4 z-[999] hidden xl:flex flex-col items-start xl:items-end select-none">
             {showLegend && (
               <div className="bg-white/95 backdrop-blur-md border border-slate-200/80 px-3.5 py-2.5 rounded-2xl shadow-md text-[9px] mb-2 space-y-1.5 animate-in slide-in-from-bottom-2 duration-150">
                 <span className="font-bold text-slate-400 uppercase tracking-wider block font-mono">Legend</span>
