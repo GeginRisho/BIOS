@@ -64,22 +64,77 @@ export default function RelationshipGraph({ businessName, mobileMenuOpen }: Rela
   const [showMobileInspector, setShowMobileInspector] = useState(false);
   const [showLegend, setShowLegend] = useState(false);
   const [layoutMode, setLayoutMode] = useState<'mobile' | 'tablet' | 'desktop'>('desktop');
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const containerWrapperRef = useRef<HTMLDivElement>(null);
+
+  const [width, setWidth] = useState(800);
+  const [height, setHeight] = useState(650);
+
+  const updateDimensions = () => {
+    if (typeof window === 'undefined') return;
+    
+    let w = 800;
+    let h = 650;
+    
+    if (isFullscreen) {
+      w = window.innerWidth;
+      h = window.innerHeight;
+    } else {
+      if (containerWrapperRef.current) {
+        w = containerWrapperRef.current.clientWidth || 800;
+      } else {
+        w = window.innerWidth;
+      }
+      
+      const screenW = window.innerWidth;
+      if (screenW <= 360) {
+        h = 420;
+      } else if (screenW < 768) {
+        h = 500;
+      } else if (screenW < 1280) {
+        h = 600;
+      } else {
+        h = 650;
+      }
+    }
+    
+    setWidth(w);
+    setHeight(h);
+  };
 
   useEffect(() => {
+    let frameId: number;
+    let timeoutId: any;
+    
     const handleResize = () => {
-      const w = window.innerWidth;
-      if (w < 768) {
-        setLayoutMode('mobile');
-      } else if (w < 1280) {
-        setLayoutMode('tablet');
-      } else {
-        setLayoutMode('desktop');
-      }
+      clearTimeout(timeoutId);
+      timeoutId = setTimeout(() => {
+        frameId = requestAnimationFrame(() => {
+          updateDimensions();
+          
+          const w = window.innerWidth;
+          if (w < 768) {
+            setLayoutMode('mobile');
+          } else if (w < 1280) {
+            setLayoutMode('tablet');
+          } else {
+            setLayoutMode('desktop');
+          }
+        });
+      }, 100);
     };
-    handleResize();
+    
     window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
-  }, []);
+    window.addEventListener("orientationchange", handleResize);
+    updateDimensions();
+    
+    return () => {
+      window.removeEventListener("resize", handleResize);
+      window.removeEventListener("orientationchange", handleResize);
+      clearTimeout(timeoutId);
+      cancelAnimationFrame(frameId);
+    };
+  }, [isFullscreen]);
 
   const isMobile = layoutMode === 'mobile';
 
@@ -92,10 +147,6 @@ export default function RelationshipGraph({ businessName, mobileMenuOpen }: Rela
     subsidiary: '#34D399',  // Light Emerald for subsidiaries
     parent: '#64748B'       // Slate grey for parents
   };
-
-  // Dynamic D3 dimensions
-  const width = 800;
-  const height = layoutMode === 'mobile' ? 420 : (layoutMode === 'tablet' ? 500 : 650);
 
   const [dbData, setDbData] = useState<{ nodes: Node[], links: Link[] } | null>(null);
 
@@ -354,8 +405,8 @@ export default function RelationshipGraph({ businessName, mobileMenuOpen }: Rela
     if (!svgRef.current || !zoomRef.current || filteredNodes.length === 0) return;
     const svg = d3.select(svgRef.current);
     
-    if (layoutMode === 'mobile' || layoutMode === 'tablet') {
-      // Fit all nodes into viewport with 28px padding to occupy 85-90% of available canvas
+    if (layoutMode === 'mobile' || layoutMode === 'tablet' || isFullscreen) {
+      // Fit all nodes into viewport to occupy 90-95% (92%) of available width and height
       let minX = Infinity, maxX = -Infinity;
       let minY = Infinity, maxY = -Infinity;
       
@@ -373,7 +424,7 @@ export default function RelationshipGraph({ businessName, mobileMenuOpen }: Rela
       const graphH = maxY - minY;
       
       if (graphW > 0 && graphH > 0) {
-        const padding = 28; // 24-32px padding
+        const padding = 20; // 20px padding
         const scaleX = (width - padding * 2) / graphW;
         const scaleY = (height - padding * 2) / graphH;
         let scale = Math.min(scaleX, scaleY);
@@ -381,7 +432,7 @@ export default function RelationshipGraph({ businessName, mobileMenuOpen }: Rela
         if (scale >= 1.0) {
           scale = 1.0; // Do not shrink unless it exceeds the canvas
         } else {
-          scale = scale * 0.88; // Scale to occupy 85-90% (88%) of viewport
+          scale = scale * 0.92; // Scale to occupy 90-95% (92%) of viewport
         }
         
         const centerX = (minX + maxX) / 2;
@@ -409,10 +460,10 @@ export default function RelationshipGraph({ businessName, mobileMenuOpen }: Rela
     }
   };
 
-  // Center the graph automatically after data, viewport, selection, filters or drawer changes
+  // Center the graph automatically after data, viewport, selection, filters, fullscreen or drawer changes
   useEffect(() => {
     fitGraph(selectedNode);
-  }, [selectedNode, layoutMode, businessName, activeFilters, filteredNodes, filteredLinks, mobileMenuOpen]);
+  }, [selectedNode, layoutMode, businessName, activeFilters, filteredNodes, filteredLinks, mobileMenuOpen, isFullscreen, width, height]);
 
   // Initialize and run simulation
   useEffect(() => {
@@ -445,6 +496,9 @@ export default function RelationshipGraph({ businessName, mobileMenuOpen }: Rela
           if (isSelected || isHovered || scale >= 0.75) return 1;
           return 0;
         });
+        
+        // Hide edge labels at low zoom on mobile/tablet to avoid clutter
+        svg.selectAll(".edge-label").style("opacity", (layoutMode === 'mobile' || layoutMode === 'tablet') ? (scale >= 0.85 ? 1 : 0) : 1);
       });
 
     zoomRef.current = zoomBehavior;
@@ -491,12 +545,12 @@ export default function RelationshipGraph({ businessName, mobileMenuOpen }: Rela
 
     // Force simulation configurations (strong collision & constraints for clean positions)
     const simulation = d3.forceSimulation<Node>(filteredNodes)
-      .force("link", d3.forceLink<Node, Link>(filteredLinks).id((d) => d.id).distance(layoutMode === 'mobile' ? 120 : 180))
+      .force("link", d3.forceLink<Node, Link>(filteredLinks).id((d) => d.id).distance(layoutMode === 'mobile' ? 150 : 180))
       .force("charge", d3.forceManyBody().strength(layoutMode === 'mobile' ? -400 : -800))
       .force("center", d3.forceCenter(width / 2, height / 2))
       .force("collision", d3.forceCollide().radius((d: any) => {
         const baseSize = layoutMode === 'mobile' ? (d.valueSize ?? 24) * 0.8 : (d.valueSize ?? 24);
-        return baseSize + (layoutMode === 'mobile' ? 20 : 54);
+        return baseSize + (layoutMode === 'mobile' ? 36 : 54);
       }))
       .alphaDecay(0.06);
 
@@ -716,7 +770,7 @@ export default function RelationshipGraph({ businessName, mobileMenuOpen }: Rela
       simulation.stop();
       clearTimeout(loaderTimeout);
     };
-  }, [filteredNodes, filteredLinks]);
+  }, [filteredNodes, filteredLinks, width, height, layoutMode, isFullscreen]);
 
   // Update selected rings & label opacity dynamically on selection/hover changes
   useEffect(() => {
@@ -737,6 +791,11 @@ export default function RelationshipGraph({ businessName, mobileMenuOpen }: Rela
         if (isSelected || isHovered || currentScale >= 0.75) return 1;
         return 0;
       });
+
+    // Hide edge labels at low zoom on mobile/tablet to avoid clutter
+    d3.select(svgRef.current)
+      .selectAll(".edge-label")
+      .style("opacity", (layoutMode === 'mobile' || layoutMode === 'tablet') ? (currentScale >= 0.85 ? 1 : 0) : 1);
   }, [selectedNode, hoveredNode, layoutMode]);
 
   // Count items
@@ -788,7 +847,15 @@ export default function RelationshipGraph({ businessName, mobileMenuOpen }: Rela
 
       {/* GRAPH CANVAS (3 Cols) */}
       <div className="xl:col-span-3 flex flex-col space-y-4 relative w-full max-w-full overflow-hidden">
-        <div className="rounded-3xl border border-slate-200/80 bg-slate-50 relative h-[420px] md:h-[500px] xl:h-[650px] shadow-inner overflow-hidden w-full max-w-full">
+        <div 
+          ref={containerWrapperRef}
+          className={
+            isFullscreen 
+              ? "fixed inset-0 z-[150] bg-slate-50 w-screen h-screen flex flex-col animate-in fade-in duration-200 overflow-hidden" 
+              : "rounded-3xl border border-slate-200/80 bg-slate-50 relative h-[420px] sm:h-[500px] md:h-[600px] xl:h-[650px] shadow-inner overflow-hidden w-full max-w-full"
+          }
+          style={{ touchAction: 'none' }}
+        >
           
           {isLoading && (
             <div className="absolute inset-0 bg-slate-50/70 backdrop-blur-sm z-20 flex items-center justify-center">
@@ -808,7 +875,12 @@ export default function RelationshipGraph({ businessName, mobileMenuOpen }: Rela
             height="100%" 
             viewBox={`0 0 ${width} ${height}`} 
             preserveAspectRatio="xMidYMid meet"
-            className="w-full h-full block" 
+            className="w-full h-full block touch-none" 
+            onClick={(e) => {
+              if (e.target === svgRef.current && (layoutMode === 'mobile' || layoutMode === 'tablet') && !isFullscreen) {
+                setIsFullscreen(true);
+              }
+            }}
           />
 
           {/* Floating Tooltip */}
@@ -886,15 +958,15 @@ export default function RelationshipGraph({ businessName, mobileMenuOpen }: Rela
                 <ZoomOut className="w-5 h-5" />
               </button>
               <button 
-                onClick={handleFitScreen} 
+                onClick={() => setIsFullscreen(!isFullscreen)} 
                 className="w-11 h-11 hover:bg-slate-100 rounded-lg text-slate-600 hover:text-slate-900 transition flex items-center justify-center shrink-0" 
-                title="Fit to Screen"
+                title={isFullscreen ? "Exit Fullscreen" : "Fullscreen"}
               >
                 <Maximize className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="pointer-events-auto">
+            <div className="pointer-events-auto flex space-x-2">
               <button
                 onClick={() => setShowMobileFilters(true)}
                 className="bg-white/90 backdrop-blur-md border border-slate-200/80 px-3 rounded-xl shadow-md text-slate-700 font-bold text-[10px] flex items-center space-x-1.5 h-11 shrink-0 cursor-pointer"
@@ -902,49 +974,26 @@ export default function RelationshipGraph({ businessName, mobileMenuOpen }: Rela
                 <Filter className="w-4 h-4 text-emerald-500" />
                 <span>Filters</span>
               </button>
+              {isFullscreen && (
+                <button
+                  onClick={() => setIsFullscreen(false)}
+                  className="bg-red-50 hover:bg-red-100 border border-red-200 px-3 rounded-xl shadow-md text-red-600 font-extrabold text-[10px] flex items-center space-x-1.5 h-11 shrink-0 cursor-pointer"
+                >
+                  <span>Close</span>
+                </button>
+              )}
             </div>
           </div>
 
           {/* Mobile Bottom Action Bar */}
           <div className="xl:hidden absolute bottom-4 left-4 right-4 z-10 flex justify-between items-center pointer-events-none">
             <div className="flex items-end select-none pointer-events-auto relative">
-              {showLegend && (
-                <div className="absolute bottom-full left-0 mb-2 bg-white/95 backdrop-blur-md border border-slate-200/80 px-3.5 py-2.5 rounded-2xl shadow-md text-[9px] space-y-1.5 animate-in slide-in-from-bottom-2 duration-150 w-48">
-                  <span className="font-bold text-slate-400 uppercase tracking-wider block font-mono">Legend</span>
-                  <div className="grid grid-cols-1 gap-y-1 text-slate-600 font-semibold">
-                    <div className="flex items-center space-x-1.5">
-                      <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block"></span>
-                      <span>Main Twin (HQ)</span>
-                    </div>
-                    <div className="flex items-center space-x-1.5">
-                      <span className="w-2.5 h-2.5 rounded-full bg-teal-500 inline-block"></span>
-                      <span>Partners (Teal)</span>
-                    </div>
-                    <div className="flex items-center space-x-1.5">
-                      <span className="w-2.5 h-2.5 rounded-full bg-amber-500 inline-block"></span>
-                      <span>Competitors</span>
-                    </div>
-                    <div className="flex items-center space-x-1.5">
-                      <span className="w-2.5 h-2.5 rounded-full bg-indigo-500 inline-block"></span>
-                      <span>Suppliers</span>
-                    </div>
-                    <div className="flex items-center space-x-1.5">
-                      <span className="w-2.5 h-2.5 rounded-full bg-blue-500 inline-block"></span>
-                      <span>Subsidiaries</span>
-                    </div>
-                    <div className="flex items-center space-x-1.5">
-                      <span className="w-2.5 h-2.5 rounded-full bg-slate-500 inline-block"></span>
-                      <span>Parent Co</span>
-                    </div>
-                  </div>
-                </div>
-              )}
               <button 
-                onClick={() => setShowLegend(!showLegend)}
+                onClick={() => setShowLegend(true)}
                 className="bg-white hover:bg-slate-50 border border-slate-200/80 rounded-xl shadow-md text-slate-600 hover:text-slate-900 transition flex items-center justify-center space-x-1 text-[10px] font-bold h-11 px-3 cursor-pointer"
               >
                 <span>🗺️</span>
-                <span>{showLegend ? 'Hide' : 'Legend'}</span>
+                <span>Legend</span>
               </button>
             </div>
 
@@ -1258,6 +1307,62 @@ export default function RelationshipGraph({ businessName, mobileMenuOpen }: Rela
             </button>
           </div>
         </div>
+      )}
+
+      {/* Mobile Legend Bottom Sheet Overlay */}
+      {isMobile && showLegend && (
+        <>
+          {/* Backdrop overlay */}
+          <div 
+            className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-[155] xl:hidden animate-in fade-in duration-200"
+            onClick={() => setShowLegend(false)}
+          />
+          {/* Bottom Sheet */}
+          <div 
+            className="fixed bottom-0 left-0 right-0 bg-white rounded-t-3xl border-t border-slate-200 p-5 z-[160] xl:hidden animate-in slide-in-from-bottom duration-300 shadow-2xl max-h-[50vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Drag Handle indicator */}
+            <div className="w-12 h-1 bg-slate-200 rounded-full mx-auto mb-4" />
+            
+            <div className="flex justify-between items-center mb-3">
+              <span className="font-extrabold text-slate-800 text-xs uppercase tracking-wider font-mono">Relationship Legend</span>
+              <button 
+                onClick={() => setShowLegend(false)}
+                className="text-slate-400 hover:text-slate-600 font-bold text-xs uppercase"
+              >
+                Close
+              </button>
+            </div>
+            
+            <div className="grid grid-cols-2 gap-3.5 text-xs text-slate-600 font-semibold py-2">
+              <div className="flex items-center space-x-2.5">
+                <span className="w-3 h-3 rounded-full bg-emerald-500 inline-block shrink-0"></span>
+                <span>Main Twin (HQ)</span>
+              </div>
+              <div className="flex items-center space-x-2.5">
+                <span className="w-3 h-3 rounded-full bg-teal-500 inline-block shrink-0"></span>
+                <span>Partners (Teal)</span>
+              </div>
+              <div className="flex items-center space-x-2.5">
+                <span className="w-3 h-3 rounded-full bg-amber-500 inline-block shrink-0"></span>
+                <span>Competitors</span>
+              </div>
+              <div className="flex items-center space-x-2.5">
+                <span className="w-3 h-3 rounded-full bg-indigo-500 inline-block shrink-0"></span>
+                <span>Suppliers</span>
+              </div>
+              <div className="flex items-center space-x-2.5">
+                <span className="w-3 h-3 rounded-full bg-blue-500 inline-block shrink-0"></span>
+                <span>Subsidiaries</span>
+              </div>
+              <div className="flex items-center space-x-2.5">
+                <span className="w-3 h-3 rounded-full bg-slate-500 inline-block shrink-0"></span>
+                <span>Parent Co</span>
+              </div>
+            </div>
+          </div>
+        </>
       )}
     </div>
   );
