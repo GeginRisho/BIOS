@@ -62,16 +62,25 @@ export default function RelationshipGraph({ businessName }: RelationshipGraphPro
   const [showMobileFilters, setShowMobileFilters] = useState(false);
   const [showMobileInspector, setShowMobileInspector] = useState(false);
   const [showLegend, setShowLegend] = useState(false);
-  const [isMobile, setIsMobile] = useState(false);
+  const [layoutMode, setLayoutMode] = useState<'mobile' | 'tablet' | 'desktop'>('desktop');
 
   useEffect(() => {
-    const checkMobile = () => {
-      setIsMobile(window.innerWidth < 768);
+    const handleResize = () => {
+      const w = window.innerWidth;
+      if (w < 768) {
+        setLayoutMode('mobile');
+      } else if (w < 1280) {
+        setLayoutMode('tablet');
+      } else {
+        setLayoutMode('desktop');
+      }
     };
-    checkMobile();
-    window.addEventListener("resize", checkMobile);
-    return () => window.removeEventListener("resize", checkMobile);
+    handleResize();
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
   }, []);
+
+  const isMobile = layoutMode === 'mobile';
 
   // Enterprise styling color definitions
   const relationshipColors: Record<string, string> = {
@@ -85,7 +94,7 @@ export default function RelationshipGraph({ businessName }: RelationshipGraphPro
 
   // Dynamic D3 dimensions
   const width = 800;
-  const height = isMobile ? 420 : 450;
+  const height = layoutMode === 'mobile' ? 420 : (layoutMode === 'tablet' ? 500 : 650);
 
   const [dbData, setDbData] = useState<{ nodes: Node[], links: Link[] } | null>(null);
 
@@ -426,8 +435,8 @@ export default function RelationshipGraph({ businessName }: RelationshipGraphPro
         svg.selectAll(".node-label").style("opacity", (d: any) => {
           const isSelected = selectedNode?.id === d.id;
           const isHovered = hoveredNode?.id === d.id;
-          if (scale < 0.6 && !isSelected && !isHovered) return 0;
-          return 1;
+          if (isSelected || isHovered || scale >= 0.75) return 1;
+          return 0;
         });
       });
 
@@ -480,7 +489,7 @@ export default function RelationshipGraph({ businessName }: RelationshipGraphPro
       .force("center", d3.forceCenter(width / 2, height / 2))
       .force("collision", d3.forceCollide().radius((d: any) => {
         const baseSize = isMobile ? (d.valueSize ?? 24) * 0.8 : (d.valueSize ?? 24);
-        return baseSize + (isMobile ? 25 : 38);
+        return baseSize + (layoutMode === 'mobile' ? 25 : 54);
       }))
       .alphaDecay(0.06);
 
@@ -718,17 +727,10 @@ export default function RelationshipGraph({ businessName }: RelationshipGraphPro
       .style("opacity", (d: any) => {
         const isSelected = selectedNode?.id === d.id;
         const isHovered = hoveredNode?.id === d.id;
-        if (isMobile) {
-          // Mobile labels visibility: only show if selected, hovered, or zoom > 0.8
-          if (isSelected || isHovered || currentScale > 0.8) return 1;
-          return 0;
-        } else {
-          // Desktop labels visibility: hide at low zoom (< 0.6) unless selected/hovered
-          if (currentScale < 0.6 && !isSelected && !isHovered) return 0;
-          return 1;
-        }
+        if (isSelected || isHovered || currentScale >= 0.75) return 1;
+        return 0;
       });
-  }, [selectedNode, hoveredNode, isMobile]);
+  }, [selectedNode, hoveredNode, layoutMode]);
 
   // Count items
   const partnersCount = graphData.nodes.filter(n => n.type === 'partner').length;

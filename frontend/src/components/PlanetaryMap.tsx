@@ -513,7 +513,7 @@ export default function PlanetaryMap({ onSelectBusiness, selectedId, businesses 
       `}</style>
 
       {/* MAP VIEWER PORT (3 Cols) */}
-      <div className="xl:col-span-3 rounded-3xl overflow-hidden border border-slate-200/80 bg-slate-50 relative h-[360px] xl:h-full shadow-inner w-full max-w-full">
+      <div className="xl:col-span-3 rounded-3xl overflow-hidden border border-slate-200/80 bg-slate-50 relative h-[360px] md:h-[420px] xl:h-full shadow-inner w-full max-w-full">
         <div ref={containerRef} style={{ width: '100%', height: '100%', maxWidth: '100%', touchAction: 'none' }} />
 
         {/* Floating Expandable Legend Button */}
@@ -542,7 +542,7 @@ export default function PlanetaryMap({ onSelectBusiness, selectedId, businesses 
           )}
           <button 
             onClick={() => setShowLegend(!showLegend)}
-            className="bg-white hover:bg-slate-50 border border-slate-200/80 rounded-xl shadow-md text-slate-600 hover:text-slate-900 transition flex items-center justify-center space-x-1.5 text-[10px] font-bold pointer-events-auto h-11 px-4"
+            className="bg-white hover:bg-slate-50 border border-slate-200/80 rounded-xl shadow-md text-slate-600 hover:text-slate-900 transition flex items-center justify-center space-x-1.5 text-[10px] font-bold pointer-events-auto h-11 px-4 cursor-pointer"
           >
             <span>🗺️</span>
             <span>{showLegend ? 'Hide Legend' : 'Show Legend'}</span>
@@ -551,7 +551,7 @@ export default function PlanetaryMap({ onSelectBusiness, selectedId, businesses 
       </div>
 
       {/* DETAILED DRILLDOWN PANEL (1 Col - Hidden on mobile if no business is selected) */}
-      <div className={`xl:col-span-1 rounded-3xl p-5 flex flex-col justify-between bg-white border border-slate-200/80 overflow-y-auto shadow-sm ${!selectedBiz ? 'hidden xl:flex' : 'flex'} h-[400px] xl:h-full`}>
+      <div className={`xl:col-span-1 rounded-3xl p-5 flex flex-col justify-between bg-white border border-slate-200/80 overflow-y-auto shadow-sm ${!selectedBiz ? 'hidden xl:flex' : 'flex'} h-auto xl:h-full`}>
         {selectedBiz ? (
           <div className="space-y-4 flex-1 flex flex-col justify-between">
             <div>

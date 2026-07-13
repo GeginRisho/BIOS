@@ -45,7 +45,8 @@ import {
   AlertTriangle,
   Eye,
   EyeOff,
-  Menu
+  Menu,
+  Bell
 } from 'lucide-react';
 import { useBIOSStore } from '../lib/store';
 import ErrorBoundary from '../components/ErrorBoundary';
@@ -232,6 +233,33 @@ export default function BIOSDashboard() {
   // Audit Logs (Real database fetch)
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
 
+  // Notifications and Layout Mode states
+  const [showNotifDropdown, setShowNotifDropdown] = useState(false);
+  const [layoutMode, setLayoutMode] = useState<'mobile' | 'tablet' | 'desktop'>('desktop');
+  const [notifications, setNotifications] = useState([
+    { id: 1, type: 'system', category: 'System Alert', text: 'Operational SLA latency stable at 24ms', time: '5m ago', unread: true },
+    { id: 2, type: 'deployment', category: 'Deployment Alert', text: 'Global coordinates twin database synchronized', time: '1h ago', unread: true },
+    { id: 3, type: 'ai', category: 'AI Swarm Alert', text: 'AI Swarm completed query analysis for Tesla Inc', time: '3h ago', unread: false },
+    { id: 4, type: 'sync', category: 'Database Sync', text: 'Registry backup successfully completed', time: '5h ago', unread: false },
+    { id: 5, type: 'scan', category: 'Recent Scan', text: 'Database scanned for risk triggers: 0 anomalies', time: '8h ago', unread: false }
+  ]);
+
+  useEffect(() => {
+    const handleResize = () => {
+      const w = window.innerWidth;
+      if (w < 768) {
+        setLayoutMode('mobile');
+      } else if (w < 1280) {
+        setLayoutMode('tablet');
+      } else {
+        setLayoutMode('desktop');
+      }
+    };
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
   // User Management (Super Admin only)
   const [managedUsers, setManagedUsers] = useState<any[]>([]);
   const [userSearchQuery, setUserSearchQuery] = useState("");
@@ -393,6 +421,69 @@ export default function BIOSDashboard() {
   useEffect(() => {
     loadBusinesses();
   }, []);
+
+  // Connect to live WebSocket notification broker
+  useEffect(() => {
+    if (!user || !user.token) return;
+    
+    const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+    const wsUrl = baseUrl.replace(/^http/, 'ws').replace(/\/$/, '') + '/api/v1/notifications/ws';
+    
+    let socket: WebSocket | null = null;
+    let reconnectTimeout: any = null;
+    
+    const connect = () => {
+      try {
+        socket = new WebSocket(wsUrl);
+        
+        socket.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            if (data && data.title) {
+              // Append to notifications state list as unread
+              setNotifications(prev => [
+                {
+                  id: Date.now(),
+                  type: data.category || 'system',
+                  category: data.category ? `${data.category.toUpperCase()} Alert` : 'System Alert',
+                  text: `${data.title}: ${data.message || ''}`,
+                  time: 'Just now',
+                  unread: true
+                },
+                ...prev
+              ]);
+            }
+          } catch (e) {
+            console.error("Failed to parse WebSocket message data:", e);
+          }
+        };
+        
+        socket.onclose = () => {
+          reconnectTimeout = setTimeout(connect, 5000);
+        };
+        
+        socket.onerror = (err) => {
+          console.warn("WebSocket error observed, closing connection:", err);
+          socket?.close();
+        };
+      } catch (err) {
+        console.error("Failed to establish WebSocket connection:", err);
+        reconnectTimeout = setTimeout(connect, 5000);
+      }
+    };
+    
+    connect();
+    
+    return () => {
+      if (socket) {
+        socket.onclose = null;
+        socket.close();
+      }
+      if (reconnectTimeout) {
+        clearTimeout(reconnectTimeout);
+      }
+    };
+  }, [user]);
 
   // Scroll Lock when mobile drawer is open
   useEffect(() => {
@@ -677,13 +768,17 @@ export default function BIOSDashboard() {
           const hasCoords = (foundBiz.coords && Array.isArray(foundBiz.coords) && foundBiz.coords.length === 2) ||
                             (typeof foundBiz.latitude === 'number' && typeof foundBiz.longitude === 'number');
           if (!hasCoords) {
-            setToastMessage(`Scanned Twin: ${foundBiz.name} (Location coordinates missing)`);
+            setToastMessage(`Scan completed: ${foundBiz.name} (Location coordinates missing)`);
           } else {
-            setToastMessage(`Scanned & Synchronized Digital Twin: ${foundBiz.name}`);
+            setToastMessage(`Scan completed successfully for ${foundBiz.name}`);
           }
+          setNotifications(prev => [
+            { id: Date.now(), type: 'scan', category: 'Scan Alert', text: `Scan completed successfully for ${foundBiz.name}`, time: 'Just now', unread: true },
+            ...prev
+          ]);
           setSelectedBiz(foundBiz);
         } else {
-          setToastMessage("No company found");
+          setToastMessage("Scan failed: No company found");
         }
       }, 200);
     }, 800);
@@ -854,6 +949,10 @@ export default function BIOSDashboard() {
         setSwarmResult(resultData);
         setIsSwarmRunning(false);
         setToastMessage("AI Agent Swarm completed query analysis!");
+        setNotifications(prev => [
+          { id: Date.now(), type: 'ai', category: 'AI Swarm Alert', text: 'AI Swarm completed query analysis successfully', time: 'Just now', unread: true },
+          ...prev
+        ]);
       }, 4800);
     };
 
@@ -1427,18 +1526,19 @@ export default function BIOSDashboard() {
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans select-none">
       
       {/* GLOBAL TOPBAR BRANDING */}
-      <header className="bg-white border-b border-slate-200/80 px-4 md:px-6 py-2.5 md:py-3.5 flex items-center justify-between shadow-xs relative z-40 select-none no-print">
+      <header className="bg-white border-b border-slate-200/80 px-4 md:px-6 h-16 xl:h-auto xl:py-3.5 flex items-center justify-between shadow-xs relative z-40 select-none no-print">
         <div className="flex items-center space-x-2 md:space-x-3 min-w-0">
-          {/* Hamburger menu button for mobile devices */}
+          {/* Hamburger menu button for mobile/tablet devices */}
           <button 
             onClick={() => setMobileMenuOpen(true)}
-            className="md:hidden p-1.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-lg text-slate-600 hover:text-slate-800 transition shrink-0"
+            className="xl:hidden w-11 h-11 flex items-center justify-center bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl text-slate-600 hover:text-slate-800 transition shrink-0 cursor-pointer"
+            title="Open Menu"
           >
-            <Menu className="w-4 h-4" />
+            <Menu className="w-[22px] h-[22px]" />
           </button>
 
-          <div className="w-7 h-7 md:w-9 md:h-9 bg-indigo-600 rounded-lg md:rounded-xl flex items-center justify-center text-white font-extrabold shadow-sm shrink-0">
-            <Globe className="w-4 h-4 md:w-5 md:h-5 animate-pulse" />
+          <div className="w-10 h-10 xl:w-9 xl:h-9 bg-indigo-600 rounded-xl flex items-center justify-center text-white font-extrabold shadow-sm shrink-0">
+            <Globe className="w-5.5 h-5.5 xl:w-5 xl:h-5 animate-pulse" />
           </div>
           <div className="min-w-0">
             <h1 className="text-xs md:text-sm font-extrabold text-slate-900 tracking-tight flex items-center space-x-1 md:space-x-2 truncate">
@@ -1446,18 +1546,18 @@ export default function BIOSDashboard() {
               <span className="sm:hidden">BIOS</span>
               <span className="text-[8px] md:text-[9px] bg-slate-100 text-slate-500 border border-slate-200 px-1 md:px-1.5 py-0.5 rounded font-mono uppercase tracking-wider shrink-0">{user.role.replace('_', ' ')}</span>
             </h1>
-            <p className="hidden md:block text-[10px] text-slate-400 font-semibold mt-0.5">Palantir Foundry / Bloomberg SaaS digital twin cluster</p>
+            <p className="hidden xl:block text-[10px] text-slate-400 font-semibold mt-0.5">Palantir Foundry / Bloomberg SaaS digital twin cluster</p>
           </div>
         </div>
 
-        {/* Dynamic Organization Swapper */}
+        {/* Dynamic Organization Swapper and Bell Dropdown */}
         <div className="flex items-center space-x-2 md:space-x-4 shrink-0">
-          <div className="flex items-center space-x-1 md:space-x-2 bg-slate-50 border border-slate-200 px-2 md:px-3 py-1 md:py-1.5 rounded-lg md:rounded-xl">
+          <div className="hidden sm:flex items-center space-x-1 md:space-x-2 bg-slate-50 border border-slate-200 px-2 md:px-3 h-11 rounded-xl">
             <Building className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
             <select
               value={activeOrg}
               onChange={(e) => setActiveOrg(e.target.value)}
-              className="bg-transparent border-0 outline-none text-[10px] md:text-xs font-bold text-slate-700 cursor-pointer max-w-[80px] sm:max-w-none"
+              className="bg-transparent border-0 outline-none text-[10px] md:text-xs font-bold text-slate-700 cursor-pointer max-w-[80px] sm:max-w-none h-full"
             >
               <option value="Apple Organization Console">Apple Org</option>
               <option value="Google Cloud Admin console">Google Org</option>
@@ -1466,12 +1566,70 @@ export default function BIOSDashboard() {
             </select>
           </div>
 
-          {/* User badge */}
-          <div className="flex items-center space-x-1.5 shrink-0">
-            <div className="w-7 h-7 md:w-8 md:h-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-extrabold text-[10px] md:text-xs">
+          {/* Notification Bell Dropdown Container */}
+          <div className="relative">
+            <button 
+              onClick={() => setShowNotifDropdown(!showNotifDropdown)}
+              className="w-11 h-11 hover:bg-slate-50 rounded-xl border border-slate-150 flex items-center justify-center text-slate-600 hover:text-slate-900 transition relative cursor-pointer"
+              title="Notifications"
+            >
+              <Bell className="w-[22px] h-[22px]" />
+              {notifications.some(n => n.unread) && (
+                <span className="absolute top-2.5 right-2.5 w-2 h-2 bg-red-500 rounded-full border border-white animate-pulse" />
+              )}
+            </button>
+
+            {/* Dropdown overlay and menu */}
+            {showNotifDropdown && (
+              <>
+                <div 
+                  className="fixed inset-0 z-40 bg-transparent cursor-default" 
+                  onClick={() => setShowNotifDropdown(false)}
+                />
+                <div className="absolute right-0 mt-2 w-80 bg-white border border-slate-200/90 rounded-2xl shadow-xl z-50 p-4 space-y-3 animate-in fade-in slide-in-from-top-2 duration-150 text-left">
+                  <div className="flex justify-between items-center pb-2 border-b border-slate-100">
+                    <span className="text-[10px] uppercase font-bold tracking-widest text-slate-400 font-mono">Recent Notifications</span>
+                    <button 
+                      onClick={() => {
+                        setNotifications(prev => prev.map(n => ({ ...n, unread: false })));
+                      }}
+                      className="text-[9px] text-indigo-600 font-bold hover:underline"
+                    >
+                      Mark all read
+                    </button>
+                  </div>
+                  
+                  <div className="space-y-2.5 max-h-64 overflow-y-auto divide-y divide-slate-50 pr-1">
+                    {notifications.map((notif) => (
+                      <div key={notif.id} className="pt-2.5 first:pt-0 space-y-1">
+                        <div className="flex justify-between items-center">
+                          <span className={`text-[8px] uppercase font-bold px-1.5 py-0.5 rounded font-mono ${
+                            notif.type === 'system' ? 'bg-red-50 text-red-600 border border-red-100' :
+                            notif.type === 'deployment' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' :
+                            notif.type === 'ai' ? 'bg-indigo-50 text-indigo-600 border border-indigo-100' :
+                            'bg-amber-50 text-amber-600 border border-amber-100'
+                          }`}>
+                            {notif.category}
+                          </span>
+                          <span className="text-[8px] text-slate-400 font-medium">{notif.time}</span>
+                        </div>
+                        <p className={`text-[11px] leading-snug ${notif.unread ? 'font-bold text-slate-800' : 'text-slate-500 font-medium'}`}>
+                          {notif.text}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+
+          {/* Desktop User Avatar (Hidden on Mobile/Tablet) */}
+          <div className="hidden xl:flex items-center space-x-1.5 shrink-0">
+            <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-extrabold text-xs">
               {user.email.charAt(0).toUpperCase()}
             </div>
-            <div className="hidden md:block text-left">
+            <div className="text-left">
               <p className="text-[10px] font-bold text-slate-700 leading-tight truncate max-w-32">{user.email}</p>
               <button onClick={handleLogout} className="text-[8px] text-red-500 hover:underline font-bold uppercase tracking-wider">Sign Out</button>
             </div>
@@ -1485,23 +1643,55 @@ export default function BIOSDashboard() {
         {/* Mobile Sidebar Overlay Drawer */}
         {mobileMenuOpen && (
           <>
-            {/* Dark Backdrop Overlay */}
+            {/* Dark Blur Backdrop Overlay */}
             <div 
-              className="fixed inset-0 bg-black/45 backdrop-blur-[2.5px] z-[50] md:hidden animate-in fade-in duration-200"
+              className="fixed inset-0 bg-black/45 backdrop-blur-md z-[50] xl:hidden animate-in fade-in duration-200"
               onClick={() => setMobileMenuOpen(false)}
             />
-            {/* Drawer */}
+            {/* Drawer (Width: 300px) */}
             <div 
-              className="fixed left-0 top-0 bottom-0 w-64 bg-white p-5 flex flex-col justify-between shadow-2xl animate-in slide-in-from-left duration-250 z-[60] md:hidden"
+              className="fixed left-0 top-0 bottom-0 w-[300px] bg-white p-5 flex flex-col justify-between shadow-2xl animate-in slide-in-from-left duration-250 z-[60] xl:hidden overflow-y-auto"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="space-y-6">
-                <div className="flex justify-between items-center pb-2 border-b border-slate-100">
-                  <span className="text-[10px] uppercase font-bold tracking-widest text-slate-400 font-mono">Workspace Views</span>
-                  <button onClick={() => setMobileMenuOpen(false)} className="text-slate-400 hover:text-slate-600 font-bold p-1">✕</button>
+                {/* Header Logo */}
+                <div className="flex justify-between items-center pb-3 border-b border-slate-100">
+                  <div className="flex items-center space-x-2">
+                    <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white font-extrabold shadow-sm select-none shrink-0">
+                      <Globe className="w-5.5 h-5.5 animate-pulse" />
+                    </div>
+                    <span className="text-sm font-extrabold text-slate-900 tracking-tight font-mono">BIOS</span>
+                  </div>
+                  <button 
+                    onClick={() => setMobileMenuOpen(false)} 
+                    className="text-slate-400 hover:text-slate-600 font-extrabold w-11 h-11 flex items-center justify-center text-base cursor-pointer"
+                    title="Close"
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                {/* Workspace / Active Org Selector (Height: 44px) */}
+                <div className="space-y-1">
+                  <span className="text-[9px] uppercase font-bold tracking-widest text-slate-400 block font-mono">Workspace Console</span>
+                  <div className="flex items-center space-x-2 bg-slate-50 border border-slate-200 px-3 h-11 rounded-xl w-full">
+                    <Building className="w-4 h-4 text-indigo-500 shrink-0" />
+                    <select
+                      value={activeOrg}
+                      onChange={(e) => setActiveOrg(e.target.value)}
+                      className="bg-transparent border-0 outline-none text-xs font-bold text-slate-700 cursor-pointer w-full h-full"
+                    >
+                      <option value="Apple Organization Console">Apple Org</option>
+                      <option value="Google Cloud Admin console">Google Org</option>
+                      <option value="Microsoft Corp Enterprise">Microsoft Org</option>
+                      <option value="Tesla Gigafactory Dashboard">Tesla Org</option>
+                    </select>
+                  </div>
                 </div>
                 
+                {/* Navigation Items */}
                 <div className="space-y-1">
+                  <span className="text-[9px] uppercase font-bold tracking-widest text-slate-400 block mb-1 font-mono">Navigation Views</span>
                   {navigationItems.map((item) => {
                     const Icon = item.icon;
                     const isActive = activeView === item.key;
@@ -1524,19 +1714,49 @@ export default function BIOSDashboard() {
                     );
                   })}
                 </div>
-              </div>
-              <div className="space-y-2">
-                <div className="bg-slate-50 border border-slate-200/80 p-3 rounded-2xl">
-                  <div className="flex items-center space-x-2 text-[10px] font-bold text-slate-500">
-                    <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
-                    <span>SLA Service status active</span>
+
+                {/* Notifications Summary Block */}
+                <div className="space-y-2 border-t border-slate-100 pt-4">
+                  <span className="text-[9px] uppercase font-bold tracking-widest text-slate-400 block font-mono">Notification Summary</span>
+                  <div className="space-y-2 max-h-36 overflow-y-auto pr-1">
+                    {notifications.slice(0, 3).map((notif) => (
+                      <div key={notif.id} className="text-[10px] text-slate-600 bg-slate-50 border border-slate-150 p-2 rounded-xl">
+                        <div className="flex justify-between items-center font-bold text-slate-400 mb-0.5">
+                          <span className="text-[8px] uppercase tracking-wider">{notif.category}</span>
+                          <span>{notif.time}</span>
+                        </div>
+                        <p className="truncate font-semibold text-slate-700">{notif.text}</p>
+                      </div>
+                    ))}
                   </div>
                 </div>
+              </div>
+
+              {/* Fixed Profile & Sign Out at bottom */}
+              <div className="space-y-3 pt-4 border-t border-slate-100 bg-white">
+                {/* Profile Badge (Moved from header on mobile) */}
+                <div className="flex items-center space-x-3 bg-slate-50 border border-slate-100 p-2.5 rounded-2xl">
+                  <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-extrabold text-sm shrink-0">
+                    {user.email.charAt(0).toUpperCase()}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-bold text-slate-800 leading-tight truncate">{user.email}</p>
+                    <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-0.5 font-mono">{user.role}</p>
+                  </div>
+                </div>
+
+                {/* Settings indicator */}
+                <div className="flex items-center justify-between text-[10px] font-bold text-slate-400 px-1 font-mono">
+                  <span>SSL Mode Status</span>
+                  <span className="text-emerald-500">Active</span>
+                </div>
+
+                {/* Sign Out Button */}
                 <button
                   onClick={() => { setMobileMenuOpen(false); handleLogout(); }}
-                  className="w-full bg-red-50 hover:bg-red-100 border border-red-100 text-red-600 font-bold text-xs uppercase tracking-wider py-2.5 rounded-xl transition flex items-center justify-center space-x-1.5"
+                  className="w-full bg-red-50 hover:bg-red-100 border border-red-100 text-red-600 font-bold text-xs uppercase tracking-wider py-3 rounded-xl transition flex items-center justify-center space-x-1.5 h-11 cursor-pointer"
                 >
-                  <LogOut className="w-3.5 h-3.5" />
+                  <LogOut className="w-4 h-4" />
                   <span>Sign Out</span>
                 </button>
               </div>
@@ -1545,7 +1765,7 @@ export default function BIOSDashboard() {
         )}
 
         {/* SIDEBAR NAVIGATION BAR */}
-        <nav className="hidden md:flex w-64 bg-white border-r border-slate-200/80 p-5 flex-col justify-between shrink-0 shadow-xs">
+        <nav className="hidden xl:flex w-64 bg-white border-r border-slate-200/80 p-5 flex-col justify-between shrink-0 shadow-xs">
           <div className="space-y-6">
             <div>
               <span className="text-[9px] uppercase font-bold tracking-widest text-slate-400 block mb-2 font-mono">Workspace Views</span>
@@ -1605,13 +1825,13 @@ export default function BIOSDashboard() {
           {/* SEARCH HEADER */}
           {activeView !== 'settings' && activeView !== 'management' && (
             <div className="mb-6 max-w-3xl relative">
-              <div className="bg-white border border-slate-200/80 rounded-2xl flex overflow-hidden shadow-sm hover:shadow-md transition focus-within:border-indigo-400">
-                <div className="flex-1 flex items-center px-4 space-x-2 min-w-0">
-                  <Search className="text-slate-400 w-4 h-4 shrink-0" />
+              <div className="bg-white border border-slate-200/80 rounded-2xl flex overflow-hidden shadow-sm hover:shadow-md transition focus-within:border-indigo-400 h-[52px] xl:h-11">
+                <div className="flex-1 flex items-center px-4 space-x-2.5 min-w-0">
+                  <Search className="text-slate-400 w-5.5 h-5.5 xl:w-4 xl:h-4 shrink-0" />
                   <input 
                     type="text"
                     placeholder="Search global database twins by name, CEO, industry..."
-                    className="w-full bg-transparent border-0 outline-none text-slate-800 placeholder-slate-400 py-3 text-xs font-semibold truncate"
+                    className="w-full bg-transparent border-0 outline-none text-slate-800 placeholder-slate-400 py-3 text-sm xl:text-xs font-semibold truncate animate-none"
                     value={searchQuery}
                     onFocus={() => setShowSuggestions(true)}
                     onChange={(e) => {
@@ -1626,10 +1846,11 @@ export default function BIOSDashboard() {
                 </div>
                 <button 
                   onClick={() => handleQuery(searchQuery)}
-                  className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 sm:px-5 font-bold text-[10px] uppercase tracking-wider transition shrink-0 flex items-center justify-center"
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white w-[52px] h-[52px] xl:w-auto xl:h-full xl:px-5 font-bold text-xs xl:text-[10px] uppercase tracking-wider transition shrink-0 flex items-center justify-center cursor-pointer"
+                  title="Scan Database"
                 >
-                  <span className="hidden sm:inline">Scan Database</span>
-                  <Search className="sm:hidden w-4 h-4" />
+                  <span className="hidden xl:inline">Scan Database</span>
+                  <Search className="xl:hidden w-5.5 h-5.5" />
                 </button>
               </div>
 
@@ -1656,7 +1877,7 @@ export default function BIOSDashboard() {
           {/* VIEW: PLANETARY MAP CONTAINER */}
           <div className={activeView === 'map' ? 'block' : 'hidden'}>
             <div className="space-y-4 animate-in fade-in duration-200">
-              <div className="bg-white rounded-3xl p-4 md:p-6 border border-slate-200/80 shadow-sm">
+              <div className="bg-white rounded-3xl p-5 xl:p-6 border border-slate-200/80 shadow-sm">
                 <div className="mb-4">
                   <h2 className="text-base font-extrabold text-slate-900 flex items-center space-x-2">
                     <Globe className="text-indigo-500 w-5 h-5" />
@@ -1681,7 +1902,7 @@ export default function BIOSDashboard() {
           <div className={activeView === 'graph' ? 'block' : 'hidden'}>
             {activeView === 'graph' && (
               <div className="space-y-4 animate-in fade-in duration-200">
-                <div className="bg-white rounded-3xl p-4 md:p-6 border border-slate-200/80 shadow-sm">
+                <div className="bg-white rounded-3xl p-5 xl:p-6 border border-slate-200/80 shadow-sm">
                   <div className="mb-4">
                     <h2 className="text-base font-extrabold text-slate-900 flex items-center space-x-2">
                       <Share2 className="text-indigo-500 w-5 h-5" />
