@@ -100,29 +100,101 @@ export default function PlanetaryMap({ onSelectBusiness, selectedId, businesses 
     return null;
   };
 
+  const lastAnimatedIdRef = useRef<string | null>(selectedId);
+
   // Sync selected business when selectedId changes, triggering smooth flyTo animation
   useEffect(() => {
-    if (selectedId) {
-      const matched = activeBusinesses.find(b => b.id === selectedId || b.name === selectedId);
-      const coords = getCoords(matched);
-      if (matched && coords) {
-        setSelectedBiz(matched);
-        if (mapRef.current && mapInitialized) {
-          try {
-            mapRef.current.invalidateSize();
-            mapRef.current.flyTo(coords as L.LatLngExpression, 5, {
-              animate: true,
-              duration: 1.5
-            });
-          } catch (err) {
-            console.error("Leaflet flyTo error:", err);
-          }
-        }
-      }
+    const matched = selectedId ? activeBusinesses.find(b => b.id === selectedId || b.name === selectedId) : null;
+    const coords = matched ? getCoords(matched) : null;
+
+    if (matched) {
+      setSelectedBiz(matched);
     } else {
       setSelectedBiz(null);
     }
+
+    if (!mapRef.current || !mapInitialized) return;
+
+    const isNewChange = selectedId !== lastAnimatedIdRef.current;
+    lastAnimatedIdRef.current = selectedId;
+
+    if (matched && coords) {
+      if (isNewChange) {
+        try {
+          mapRef.current.invalidateSize();
+          mapRef.current.flyTo(coords as L.LatLngExpression, 5, {
+            animate: true,
+            duration: 1.5
+          });
+        } catch (err) {
+          console.error("Leaflet flyTo error:", err);
+        }
+      } else {
+        try {
+          mapRef.current.invalidateSize();
+          mapRef.current.setView(coords as L.LatLngExpression, 5, { animate: false });
+        } catch (err) {
+          console.error("Leaflet setView error:", err);
+        }
+      }
+    } else {
+      if (isNewChange) {
+        try {
+          mapRef.current.invalidateSize();
+          const bounds: L.LatLngTuple[] = [];
+          activeBusinesses.forEach(biz => {
+            const c = getCoords(biz);
+            if (c) bounds.push(c as L.LatLngTuple);
+          });
+          if (bounds.length > 0) {
+            mapRef.current.fitBounds(bounds, { padding: [50, 50] });
+          }
+        } catch (err) {
+          console.error("Leaflet fitBounds error:", err);
+        }
+      } else {
+        try {
+          mapRef.current.invalidateSize();
+          const bounds: L.LatLngTuple[] = [];
+          activeBusinesses.forEach(biz => {
+            const c = getCoords(biz);
+            if (c) bounds.push(c as L.LatLngTuple);
+          });
+          if (bounds.length > 0) {
+            mapRef.current.fitBounds(bounds, { padding: [50, 50], animate: false });
+          } else {
+            mapRef.current.setView([20, 10], 2, { animate: false });
+          }
+        } catch (err) {
+          console.error("Leaflet fitBounds static error:", err);
+        }
+      }
+    }
   }, [selectedId, activeBusinesses, mapInitialized]);
+
+  // Invalidate map size whenever selection/sidebar visibility changes
+  useEffect(() => {
+    if (mapRef.current) {
+      setTimeout(() => {
+        mapRef.current?.invalidateSize();
+      }, 300);
+    }
+  }, [selectedBiz]);
+
+  // Resize and Orientation change event listener to invalidate map dimensions
+  useEffect(() => {
+    const handleResize = () => {
+      if (mapRef.current) {
+        mapRef.current.invalidateSize();
+      }
+    };
+    window.addEventListener("resize", handleResize);
+    window.addEventListener("orientationchange", handleResize);
+    return () => {
+      window.removeEventListener("resize", handleResize);
+      window.removeEventListener("orientationchange", handleResize);
+    };
+  }, []);
 
   // Map Initialization & Resize Observer
   useEffect(() => {
@@ -362,15 +434,17 @@ export default function PlanetaryMap({ onSelectBusiness, selectedId, businesses 
       const customIcon = L.divIcon({
         className: 'custom-leaflet-saas-icon',
         html: `
-          <div style="background-color: ${color};" class="relative rounded-full border-2 border-white shadow-md flex items-center justify-center text-white select-none transition hover:scale-125 duration-150 ${
-            isSelected ? 'w-10 h-10 text-base animate-bounce' : 'w-7 h-7 text-xs'
-          }">
-            ${symbol}
-            ${isSelected ? '<span class="absolute -inset-2 rounded-full border border-red-500/80 animate-ping opacity-60 pointer-events-none"></span>' : ''}
+          <div class="w-[44px] h-[44px] flex items-center justify-center cursor-pointer pointer-events-auto">
+            <div style="background-color: ${color};" class="relative rounded-full border-2 border-white shadow-md flex items-center justify-center text-white select-none transition hover:scale-125 duration-150 ${
+              isSelected ? 'w-10 h-10 text-base animate-bounce' : 'w-7 h-7 text-xs'
+            }">
+              ${symbol}
+              ${isSelected ? '<span class="absolute -inset-2 rounded-full border border-red-500/80 animate-ping opacity-60 pointer-events-none"></span>' : ''}
+            </div>
           </div>
         `,
-        iconSize: isSelected ? [40, 40] : [28, 28],
-        iconAnchor: isSelected ? [20, 20] : [14, 14]
+        iconSize: [44, 44],
+        iconAnchor: [22, 22]
       });
 
       marker = L.marker(coords, { icon: customIcon });
@@ -439,8 +513,8 @@ export default function PlanetaryMap({ onSelectBusiness, selectedId, businesses 
       `}</style>
 
       {/* MAP VIEWER PORT (3 Cols) */}
-      <div className="xl:col-span-3 rounded-3xl overflow-hidden border border-slate-200/80 bg-slate-50 relative h-[360px] xl:h-full shadow-inner">
-        <div ref={containerRef} style={{ width: '100%', height: '100%' }} />
+      <div className="xl:col-span-3 rounded-3xl overflow-hidden border border-slate-200/80 bg-slate-50 relative h-[360px] xl:h-full shadow-inner w-full max-w-full">
+        <div ref={containerRef} style={{ width: '100%', height: '100%', maxWidth: '100%', touchAction: 'none' }} />
 
         {/* Floating Expandable Legend Button */}
         <div className="absolute bottom-4 left-4 z-[999] flex flex-col items-start select-none">
@@ -468,7 +542,7 @@ export default function PlanetaryMap({ onSelectBusiness, selectedId, businesses 
           )}
           <button 
             onClick={() => setShowLegend(!showLegend)}
-            className="bg-white hover:bg-slate-50 border border-slate-200/80 p-2 rounded-xl shadow-md text-slate-600 hover:text-slate-900 transition flex items-center space-x-1.5 text-[10px] font-bold pointer-events-auto"
+            className="bg-white hover:bg-slate-50 border border-slate-200/80 rounded-xl shadow-md text-slate-600 hover:text-slate-900 transition flex items-center justify-center space-x-1.5 text-[10px] font-bold pointer-events-auto h-11 px-4"
           >
             <span>🗺️</span>
             <span>{showLegend ? 'Hide Legend' : 'Show Legend'}</span>

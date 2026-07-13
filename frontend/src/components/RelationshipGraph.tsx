@@ -61,6 +61,17 @@ export default function RelationshipGraph({ businessName }: RelationshipGraphPro
   const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 });
   const [showMobileFilters, setShowMobileFilters] = useState(false);
   const [showMobileInspector, setShowMobileInspector] = useState(false);
+  const [showLegend, setShowLegend] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    checkMobile();
+    window.addEventListener("resize", checkMobile);
+    return () => window.removeEventListener("resize", checkMobile);
+  }, []);
 
   // Enterprise styling color definitions
   const relationshipColors: Record<string, string> = {
@@ -72,9 +83,9 @@ export default function RelationshipGraph({ businessName }: RelationshipGraphPro
     parent: '#64748B'       // Slate grey for parents
   };
 
-  // Static D3 dimensions
+  // Dynamic D3 dimensions
   const width = 800;
-  const height = 450;
+  const height = isMobile ? 420 : 450;
 
   const [dbData, setDbData] = useState<{ nodes: Node[], links: Link[] } | null>(null);
 
@@ -329,6 +340,64 @@ export default function RelationshipGraph({ businessName }: RelationshipGraphPro
     );
   };
 
+  const fitGraph = (targetNode?: Node | null) => {
+    if (!svgRef.current || !zoomRef.current || filteredNodes.length === 0) return;
+    const svg = d3.select(svgRef.current);
+    
+    if (isMobile) {
+      // Mobile auto-centering: fit all nodes into viewport with 16px padding
+      let minX = Infinity, maxX = -Infinity;
+      let minY = Infinity, maxY = -Infinity;
+      
+      filteredNodes.forEach((d) => {
+        const r = (d.valueSize ?? 24) * 0.8;
+        if (d.x !== undefined && d.y !== undefined) {
+          minX = Math.min(minX, d.x - r);
+          maxX = Math.max(maxX, d.x + r);
+          minY = Math.min(minY, d.y - r);
+          maxY = Math.max(maxY, d.y + r);
+        }
+      });
+      
+      const graphW = maxX - minX;
+      const graphH = maxY - minY;
+      
+      if (graphW > 0 && graphH > 0) {
+        const padding = 16;
+        const scaleX = width / (graphW + padding * 2);
+        const scaleY = height / (graphH + padding * 2);
+        const scale = Math.min(2.5, Math.max(0.4, Math.min(scaleX, scaleY)));
+        
+        const centerX = (minX + maxX) / 2;
+        const centerY = (minY + maxY) / 2;
+        
+        const transform = d3.zoomIdentity
+          .translate(width / 2 - centerX * scale, height / 2 - centerY * scale)
+          .scale(scale);
+          
+        svg.transition().duration(500).call(zoomRef.current.transform, transform);
+      }
+    } else {
+      // Desktop focus/centering remains unchanged
+      if (targetNode && targetNode.x !== undefined && targetNode.y !== undefined) {
+        const transform = d3.zoomIdentity
+          .translate(width / 2 - targetNode.x * 1.2, height / 2 - targetNode.y * 1.2)
+          .scale(1.2);
+        svg.transition().duration(500).call(zoomRef.current.transform, transform);
+      } else {
+        const transform = d3.zoomIdentity
+          .translate(0, 0)
+          .scale(1);
+        svg.transition().duration(500).call(zoomRef.current.transform, transform);
+      }
+    }
+  };
+
+  // Center the graph automatically after selection changes
+  useEffect(() => {
+    fitGraph(selectedNode);
+  }, [selectedNode, isMobile]);
+
   // Initialize and run simulation
   useEffect(() => {
     if (!svgRef.current) return;
@@ -409,7 +478,10 @@ export default function RelationshipGraph({ businessName }: RelationshipGraphPro
       .force("link", d3.forceLink<Node, Link>(filteredLinks).id((d) => d.id).distance(180))
       .force("charge", d3.forceManyBody().strength(-800))
       .force("center", d3.forceCenter(width / 2, height / 2))
-      .force("collision", d3.forceCollide().radius((d: any) => (d.valueSize ?? 24) + 38))
+      .force("collision", d3.forceCollide().radius((d: any) => {
+        const baseSize = isMobile ? (d.valueSize ?? 24) * 0.8 : (d.valueSize ?? 24);
+        return baseSize + (isMobile ? 25 : 38);
+      }))
       .alphaDecay(0.06);
 
     simulationRef.current = simulation;
@@ -460,9 +532,9 @@ export default function RelationshipGraph({ businessName }: RelationshipGraphPro
       .data(filteredNodes)
       .enter().append("g")
       .call(d3.drag<SVGGElement, Node>()
-        .on("start", dragstarted)
-        .on("drag", dragged)
-        .on("end", dragended)
+         .on("start", dragstarted)
+         .on("drag", dragged)
+         .on("end", dragended)
       )
       .attr("filter", "url(#node-shadow-premium)")
       .attr("class", "cursor-pointer");
@@ -470,7 +542,10 @@ export default function RelationshipGraph({ businessName }: RelationshipGraphPro
     // Selected Highlight Ring
     node.append("circle")
       .attr("class", "highlight-ring")
-      .attr("r", (d) => (d.valueSize ?? 24) + 6)
+      .attr("r", (d) => {
+        const r = isMobile ? (d.valueSize ?? 24) * 0.8 : (d.valueSize ?? 24);
+        return r + 6;
+      })
       .attr("fill", "none")
       .attr("stroke", "#10b981")
       .attr("stroke-width", 3)
@@ -479,7 +554,7 @@ export default function RelationshipGraph({ businessName }: RelationshipGraphPro
 
     // Main Node Circle
     node.append("circle")
-      .attr("r", (d) => d.valueSize ?? 24)
+      .attr("r", (d) => isMobile ? (d.valueSize ?? 24) * 0.8 : (d.valueSize ?? 24))
       .attr("fill", (d) => (d.type === "corp" ? "#10B981" : "#ffffff"))
       .attr("stroke", (d) => relationshipColors[d.type] || "#64748B")
       .attr("stroke-width", 3)
@@ -506,7 +581,7 @@ export default function RelationshipGraph({ businessName }: RelationshipGraphPro
     node.append("text")
       .attr("dy", "3")
       .attr("text-anchor", "middle")
-      .attr("font-size", "9px")
+      .attr("font-size", isMobile ? "7px" : "9px")
       .attr("font-weight", "800")
       .attr("fill", (d) => (d.type === "corp" ? "#ffffff" : "#1f2937"))
       .attr("class", "select-none pointer-events-none")
@@ -521,9 +596,12 @@ export default function RelationshipGraph({ businessName }: RelationshipGraphPro
 
     // Label names below nodes (no overlap spacing check)
     node.append("text")
-      .attr("dy", (d) => (d.valueSize ?? 24) + 16)
+      .attr("dy", (d) => {
+        const r = isMobile ? (d.valueSize ?? 24) * 0.8 : (d.valueSize ?? 24);
+        return r + 16;
+      })
       .attr("text-anchor", "middle")
-      .attr("font-size", "10px")
+      .attr("font-size", isMobile ? "8px" : "10px")
       .attr("font-weight", "700")
       .attr("fill", "#1f2937")
       .attr("class", "node-label select-none pointer-events-none")
@@ -531,6 +609,13 @@ export default function RelationshipGraph({ businessName }: RelationshipGraphPro
 
     // Simulation tick loop
     simulation.on("tick", () => {
+      // 1. Constrain node coordinates to stay inside the viewport bounds
+      filteredNodes.forEach((d) => {
+        const r = (isMobile ? (d.valueSize ?? 24) * 0.8 : (d.valueSize ?? 24)) + 10;
+        d.x = Math.max(r, Math.min(width - r, d.x || 0));
+        d.y = Math.max(r, Math.min(height - r, d.y || 0));
+      });
+
       link
         .attr("x1", (d) => {
           const src = d.source as Node;
@@ -538,7 +623,7 @@ export default function RelationshipGraph({ businessName }: RelationshipGraphPro
           const dx = (tgt.x || 0) - (src.x || 0);
           const dy = (tgt.y || 0) - (src.y || 0);
           const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-          const radius = src.valueSize ?? 24;
+          const radius = isMobile ? (src.valueSize ?? 24) * 0.8 : (src.valueSize ?? 24);
           return (src.x || 0) + (dx / dist) * radius;
         })
         .attr("y1", (d) => {
@@ -547,7 +632,7 @@ export default function RelationshipGraph({ businessName }: RelationshipGraphPro
           const dx = (tgt.x || 0) - (src.x || 0);
           const dy = (tgt.y || 0) - (src.y || 0);
           const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-          const radius = src.valueSize ?? 24;
+          const radius = isMobile ? (src.valueSize ?? 24) * 0.8 : (src.valueSize ?? 24);
           return (src.y || 0) + (dy / dist) * radius;
         })
         .attr("x2", (d) => {
@@ -556,7 +641,7 @@ export default function RelationshipGraph({ businessName }: RelationshipGraphPro
           const dx = (tgt.x || 0) - (src.x || 0);
           const dy = (tgt.y || 0) - (src.y || 0);
           const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-          const radius = (tgt.valueSize ?? 24) + 8;
+          const radius = (isMobile ? (tgt.valueSize ?? 24) * 0.8 : (tgt.valueSize ?? 24)) + 8;
           return (tgt.x || 0) - (dx / dist) * radius;
         })
         .attr("y2", (d) => {
@@ -565,7 +650,7 @@ export default function RelationshipGraph({ businessName }: RelationshipGraphPro
           const dx = (tgt.x || 0) - (src.x || 0);
           const dy = (tgt.y || 0) - (src.y || 0);
           const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-          const radius = (tgt.valueSize ?? 24) + 8;
+          const radius = (isMobile ? (tgt.valueSize ?? 24) * 0.8 : (tgt.valueSize ?? 24)) + 8;
           return (tgt.y || 0) - (dy / dist) * radius;
         });
 
@@ -586,6 +671,7 @@ export default function RelationshipGraph({ businessName }: RelationshipGraphPro
     // Stop loader when simulation settles or has run enough ticks
     simulation.on("end", () => {
       setIsLoading(false);
+      fitGraph(selectedNode);
     });
 
     // Timeout safety for the loading spinner
@@ -632,10 +718,17 @@ export default function RelationshipGraph({ businessName }: RelationshipGraphPro
       .style("opacity", (d: any) => {
         const isSelected = selectedNode?.id === d.id;
         const isHovered = hoveredNode?.id === d.id;
-        if (currentScale < 0.6 && !isSelected && !isHovered) return 0;
-        return 1;
+        if (isMobile) {
+          // Mobile labels visibility: only show if selected, hovered, or zoom > 0.8
+          if (isSelected || isHovered || currentScale > 0.8) return 1;
+          return 0;
+        } else {
+          // Desktop labels visibility: hide at low zoom (< 0.6) unless selected/hovered
+          if (currentScale < 0.6 && !isSelected && !isHovered) return 0;
+          return 1;
+        }
       });
-  }, [selectedNode, hoveredNode]);
+  }, [selectedNode, hoveredNode, isMobile]);
 
   // Count items
   const partnersCount = graphData.nodes.filter(n => n.type === 'partner').length;
@@ -731,31 +824,31 @@ export default function RelationshipGraph({ businessName }: RelationshipGraphPro
           <div className="absolute top-4 left-4 z-10 bg-white/90 backdrop-blur-md border border-slate-200/80 p-1.5 rounded-xl shadow-md flex space-x-1">
             <button 
               onClick={() => handleZoom(1.2)} 
-              className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-600 hover:text-slate-900 transition" 
+              className="w-11 h-11 hover:bg-slate-100 rounded-lg text-slate-600 hover:text-slate-900 transition flex items-center justify-center shrink-0" 
               title="Zoom In"
             >
-              <ZoomIn className="w-4 h-4" />
+              <ZoomIn className="w-5 h-5" />
             </button>
             <button 
               onClick={() => handleZoom(0.8)} 
-              className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-600 hover:text-slate-900 transition" 
+              className="w-11 h-11 hover:bg-slate-100 rounded-lg text-slate-600 hover:text-slate-900 transition flex items-center justify-center shrink-0" 
               title="Zoom Out"
             >
-              <ZoomOut className="w-4 h-4" />
+              <ZoomOut className="w-5 h-5" />
             </button>
             <button 
               onClick={handleFitScreen} 
-              className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-600 hover:text-slate-900 transition" 
+              className="w-11 h-11 hover:bg-slate-100 rounded-lg text-slate-600 hover:text-slate-900 transition flex items-center justify-center shrink-0" 
               title="Fit to Screen"
             >
-              <Maximize className="w-4 h-4" />
+              <Maximize className="w-5 h-5" />
             </button>
             <button 
               onClick={handleReset} 
-              className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-600 hover:text-slate-900 transition" 
+              className="w-11 h-11 hover:bg-slate-100 rounded-lg text-slate-600 hover:text-slate-900 transition flex items-center justify-center shrink-0" 
               title="Reset Layout & Filter"
             >
-              <RotateCcw className="w-4 h-4" />
+              <RotateCcw className="w-5 h-5" />
             </button>
           </div>
 
@@ -764,20 +857,20 @@ export default function RelationshipGraph({ businessName }: RelationshipGraphPro
           <div className="xl:hidden absolute top-4 right-4 z-10 flex space-x-2">
             <button
               onClick={() => setShowMobileFilters(true)}
-              className="bg-white/90 backdrop-blur-md border border-slate-200/80 px-2.5 py-1.5 rounded-xl shadow-md text-slate-700 font-bold text-[10px] flex items-center space-x-1"
+              className="bg-white/90 backdrop-blur-md border border-slate-200/80 px-3 rounded-xl shadow-md text-slate-700 font-bold text-[10px] flex items-center space-x-1.5 h-11 shrink-0 cursor-pointer"
             >
-              <Filter className="w-3.5 h-3.5 text-emerald-500" />
+              <Filter className="w-4 h-4 text-emerald-500" />
               <span>Filters</span>
             </button>
           </div>
 
           {(selectedNode || selectedLink) && (
-            <div className="xl:hidden absolute bottom-4 left-[150px] z-10">
+            <div className="xl:hidden absolute bottom-4 left-[16px] z-10">
               <button
                 onClick={() => setShowMobileInspector(true)}
-                className="bg-white/90 backdrop-blur-md border border-slate-200/80 px-2.5 py-1.5 rounded-xl shadow-md text-slate-700 font-bold text-[10px] flex items-center space-x-1"
+                className="bg-white/90 backdrop-blur-md border border-slate-200/80 px-3 rounded-xl shadow-md text-slate-700 font-bold text-[10px] flex items-center space-x-1.5 h-11 shrink-0 cursor-pointer"
               >
-                <Info className="w-3.5 h-3.5 text-emerald-500" />
+                <Info className="w-4 h-4 text-emerald-500" />
                 <span>Details</span>
               </button>
             </div>
@@ -786,42 +879,53 @@ export default function RelationshipGraph({ businessName }: RelationshipGraphPro
           <div className="xl:hidden absolute bottom-4 right-4 z-10">
             <button
               onClick={handleReset}
-              className="bg-emerald-600 hover:bg-emerald-700 text-white p-2.5 rounded-full shadow-lg transition active:scale-95 flex items-center justify-center"
+              className="bg-emerald-600 hover:bg-emerald-700 text-white w-11 h-11 rounded-full shadow-lg transition active:scale-95 flex items-center justify-center shrink-0 cursor-pointer"
               title="Reset Layout"
             >
-              <RotateCcw className="w-4 h-4" />
+              <RotateCcw className="w-5 h-5" />
             </button>
           </div>
 
-          {/* Bottom inline legend */}
-          <div className="absolute bottom-4 left-4 z-10 bg-white/95 backdrop-blur-md border border-slate-200/80 px-3.5 py-2.5 rounded-2xl shadow-md text-[9px] pointer-events-none select-none max-w-xs space-y-1.5">
-            <span className="font-bold text-slate-400 uppercase tracking-wider block font-mono">Legend</span>
-            <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-slate-600 font-semibold">
-              <div className="flex items-center space-x-1.5">
-                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block"></span>
-                <span>Main Twin (HQ)</span>
+          {/* Floating Expandable Legend Button for Relationship Graph */}
+          <div className="absolute bottom-4 left-4 xl:left-auto xl:right-4 z-[999] flex flex-col items-start xl:items-end select-none">
+            {showLegend && (
+              <div className="bg-white/95 backdrop-blur-md border border-slate-200/80 px-3.5 py-2.5 rounded-2xl shadow-md text-[9px] mb-2 space-y-1.5 animate-in slide-in-from-bottom-2 duration-150">
+                <span className="font-bold text-slate-400 uppercase tracking-wider block font-mono">Legend</span>
+                <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-slate-600 font-semibold">
+                  <div className="flex items-center space-x-1.5">
+                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block"></span>
+                    <span>Main Twin (HQ)</span>
+                  </div>
+                  <div className="flex items-center space-x-1.5">
+                    <span className="w-2.5 h-2.5 rounded-full bg-teal-500 inline-block"></span>
+                    <span>Partners (Teal)</span>
+                  </div>
+                  <div className="flex items-center space-x-1.5">
+                    <span className="w-2.5 h-2.5 rounded-full bg-amber-500 inline-block"></span>
+                    <span>Competitors</span>
+                  </div>
+                  <div className="flex items-center space-x-1.5">
+                    <span className="w-2.5 h-2.5 rounded-full bg-indigo-500 inline-block"></span>
+                    <span>Suppliers</span>
+                  </div>
+                  <div className="flex items-center space-x-1.5">
+                    <span className="w-2.5 h-2.5 rounded-full bg-blue-500 inline-block"></span>
+                    <span>Subsidiaries</span>
+                  </div>
+                  <div className="flex items-center space-x-1.5">
+                    <span className="w-2.5 h-2.5 rounded-full bg-slate-500 inline-block"></span>
+                    <span>Parent Co</span>
+                  </div>
+                </div>
               </div>
-              <div className="flex items-center space-x-1.5">
-                <span className="w-2.5 h-2.5 rounded-full bg-teal-500 inline-block"></span>
-                <span>Partners (Teal)</span>
-              </div>
-              <div className="flex items-center space-x-1.5">
-                <span className="w-2.5 h-2.5 rounded-full bg-amber-500 inline-block"></span>
-                <span>Competitors</span>
-              </div>
-              <div className="flex items-center space-x-1.5">
-                <span className="w-2.5 h-2.5 rounded-full bg-indigo-500 inline-block"></span>
-                <span>Suppliers</span>
-              </div>
-              <div className="flex items-center space-x-1.5">
-                <span className="w-2.5 h-2.5 rounded-full bg-blue-500 inline-block"></span>
-                <span>Subsidiaries</span>
-              </div>
-              <div className="flex items-center space-x-1.5">
-                <span className="w-2.5 h-2.5 rounded-full bg-slate-500 inline-block"></span>
-                <span>Parent Co</span>
-              </div>
-            </div>
+            )}
+            <button 
+              onClick={() => setShowLegend(!showLegend)}
+              className="bg-white hover:bg-slate-50 border border-slate-200/80 rounded-xl shadow-md text-slate-600 hover:text-slate-900 transition flex items-center justify-center space-x-1.5 text-[10px] font-bold pointer-events-auto h-11 px-4 cursor-pointer"
+            >
+              <span>🗺️</span>
+              <span>{showLegend ? 'Hide Legend' : 'Show Legend'}</span>
+            </button>
           </div>
         </div>
       </div>

@@ -394,6 +394,33 @@ export default function BIOSDashboard() {
     loadBusinesses();
   }, []);
 
+  // Scroll Lock when mobile drawer is open
+  useEffect(() => {
+    if (mobileMenuOpen) {
+      document.body.classList.add("overflow-hidden");
+    } else {
+      document.body.classList.remove("overflow-hidden");
+    }
+    return () => {
+      document.body.classList.remove("overflow-hidden");
+    };
+  }, [mobileMenuOpen]);
+
+  // Escape key event listener to close mobile menu
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setMobileMenuOpen(false);
+      }
+    };
+    if (mobileMenuOpen) {
+      window.addEventListener("keydown", handleKeyDown);
+    }
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [mobileMenuOpen]);
+
   // Load audit logs from backend if user is authenticated
   const loadAuditLogs = async () => {
     if (!user || !user.token) return;
@@ -615,7 +642,13 @@ export default function BIOSDashboard() {
     const safeQueryText = queryText || "";
     setSearchQuery(safeQueryText);
     setShowSuggestions(false);
-    const query = safeQueryText.toLowerCase();
+
+    if (!safeQueryText.trim()) {
+      setSelectedBiz(null);
+      return;
+    }
+
+    const query = safeQueryText.trim().toLowerCase();
 
     setIsScanning(true);
     setScanProgress(15);
@@ -1451,12 +1484,15 @@ export default function BIOSDashboard() {
         
         {/* Mobile Sidebar Overlay Drawer */}
         {mobileMenuOpen && (
-          <div 
-            className="fixed inset-0 bg-slate-900/40 backdrop-blur-[2.5px] z-50 md:hidden animate-in fade-in duration-200"
-            onClick={() => setMobileMenuOpen(false)}
-          >
+          <>
+            {/* Dark Backdrop Overlay */}
             <div 
-              className="w-64 bg-white h-full p-5 flex flex-col justify-between shadow-2xl animate-in slide-in-from-left duration-250"
+              className="fixed inset-0 bg-black/45 backdrop-blur-[2.5px] z-[50] md:hidden animate-in fade-in duration-200"
+              onClick={() => setMobileMenuOpen(false)}
+            />
+            {/* Drawer */}
+            <div 
+              className="fixed left-0 top-0 bottom-0 w-64 bg-white p-5 flex flex-col justify-between shadow-2xl animate-in slide-in-from-left duration-250 z-[60] md:hidden"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="space-y-6">
@@ -1505,7 +1541,7 @@ export default function BIOSDashboard() {
                 </button>
               </div>
             </div>
-          </div>
+          </>
         )}
 
         {/* SIDEBAR NAVIGATION BAR */}
@@ -1578,7 +1614,13 @@ export default function BIOSDashboard() {
                     className="w-full bg-transparent border-0 outline-none text-slate-800 placeholder-slate-400 py-3 text-xs font-semibold truncate"
                     value={searchQuery}
                     onFocus={() => setShowSuggestions(true)}
-                    onChange={(e) => setSearchQuery(e.target.value)}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setSearchQuery(val);
+                      if (!val.trim()) {
+                        setSelectedBiz(null);
+                      }
+                    }}
                     onKeyDown={(e) => e.key === 'Enter' && handleQuery(searchQuery)}
                   />
                 </div>
