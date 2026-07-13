@@ -59,6 +59,8 @@ export default function RelationshipGraph({ businessName }: RelationshipGraphPro
   const [isLoading, setIsLoading] = useState(false);
   const [hoveredNode, setHoveredNode] = useState<Node | null>(null);
   const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 });
+  const [showMobileFilters, setShowMobileFilters] = useState(false);
+  const [showMobileInspector, setShowMobileInspector] = useState(false);
 
   // Enterprise styling color definitions
   const relationshipColors: Record<string, string> = {
@@ -349,6 +351,15 @@ export default function RelationshipGraph({ businessName }: RelationshipGraphPro
       .on("zoom", (event) => {
         container.attr("transform", event.transform);
         transformRef.current = event.transform; // Save transform state
+        
+        // Hide labels at low zoom, except selected/hovered ones
+        const scale = event.transform.k;
+        svg.selectAll(".node-label").style("opacity", (d: any) => {
+          const isSelected = selectedNode?.id === d.id;
+          const isHovered = hoveredNode?.id === d.id;
+          if (scale < 0.6 && !isSelected && !isHovered) return 0;
+          return 1;
+        });
       });
 
     zoomRef.current = zoomBehavior;
@@ -398,7 +409,7 @@ export default function RelationshipGraph({ businessName }: RelationshipGraphPro
       .force("link", d3.forceLink<Node, Link>(filteredLinks).id((d) => d.id).distance(180))
       .force("charge", d3.forceManyBody().strength(-800))
       .force("center", d3.forceCenter(width / 2, height / 2))
-      .force("collision", d3.forceCollide().radius(65))
+      .force("collision", d3.forceCollide().radius((d: any) => (d.valueSize ?? 24) + 38))
       .alphaDecay(0.06);
 
     simulationRef.current = simulation;
@@ -415,6 +426,7 @@ export default function RelationshipGraph({ businessName }: RelationshipGraphPro
       .on("click", (event, d) => {
         setSelectedLink(d);
         setSelectedNode(null);
+        setShowMobileInspector(true);
         event.stopPropagation();
       });
 
@@ -474,6 +486,7 @@ export default function RelationshipGraph({ businessName }: RelationshipGraphPro
       .on("click", (event, d) => {
         setSelectedNode(d);
         setSelectedLink(null);
+        setShowMobileInspector(true);
         event.stopPropagation();
       })
       .on("mouseover", (event, d) => {
@@ -513,16 +526,48 @@ export default function RelationshipGraph({ businessName }: RelationshipGraphPro
       .attr("font-size", "10px")
       .attr("font-weight", "700")
       .attr("fill", "#1f2937")
-      .attr("class", "select-none pointer-events-none")
+      .attr("class", "node-label select-none pointer-events-none")
       .text((d) => d.name);
 
     // Simulation tick loop
     simulation.on("tick", () => {
       link
-        .attr("x1", (d) => (d.source as Node).x || 0)
-        .attr("y1", (d) => (d.source as Node).y || 0)
-        .attr("x2", (d) => (d.target as Node).x || 0)
-        .attr("y2", (d) => (d.target as Node).y || 0);
+        .attr("x1", (d) => {
+          const src = d.source as Node;
+          const tgt = d.target as Node;
+          const dx = (tgt.x || 0) - (src.x || 0);
+          const dy = (tgt.y || 0) - (src.y || 0);
+          const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+          const radius = src.valueSize ?? 24;
+          return (src.x || 0) + (dx / dist) * radius;
+        })
+        .attr("y1", (d) => {
+          const src = d.source as Node;
+          const tgt = d.target as Node;
+          const dx = (tgt.x || 0) - (src.x || 0);
+          const dy = (tgt.y || 0) - (src.y || 0);
+          const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+          const radius = src.valueSize ?? 24;
+          return (src.y || 0) + (dy / dist) * radius;
+        })
+        .attr("x2", (d) => {
+          const src = d.source as Node;
+          const tgt = d.target as Node;
+          const dx = (tgt.x || 0) - (src.x || 0);
+          const dy = (tgt.y || 0) - (src.y || 0);
+          const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+          const radius = (tgt.valueSize ?? 24) + 8;
+          return (tgt.x || 0) - (dx / dist) * radius;
+        })
+        .attr("y2", (d) => {
+          const src = d.source as Node;
+          const tgt = d.target as Node;
+          const dx = (tgt.x || 0) - (src.x || 0);
+          const dy = (tgt.y || 0) - (src.y || 0);
+          const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+          const radius = (tgt.valueSize ?? 24) + 8;
+          return (tgt.y || 0) - (dy / dist) * radius;
+        });
 
       node.attr("transform", (d) => `translate(${d.x || 0}, ${d.y || 0})`);
 
@@ -571,13 +616,26 @@ export default function RelationshipGraph({ businessName }: RelationshipGraphPro
     };
   }, [filteredNodes, filteredLinks]);
 
-  // Update selected rings dynamically on selection state changes
+  // Update selected rings & label opacity dynamically on selection/hover changes
   useEffect(() => {
     if (!svgRef.current) return;
+    
+    // Highlight ring visibility
     d3.select(svgRef.current)
       .selectAll(".highlight-ring")
       .attr("stroke-opacity", (d: any) => (d.id === "center" || selectedNode?.id === d.id ? 1 : 0));
-  }, [selectedNode]);
+
+    // Dynamic zoom label visibility helper
+    const currentScale = transformRef.current?.k ?? 1;
+    d3.select(svgRef.current)
+      .selectAll(".node-label")
+      .style("opacity", (d: any) => {
+        const isSelected = selectedNode?.id === d.id;
+        const isHovered = hoveredNode?.id === d.id;
+        if (currentScale < 0.6 && !isSelected && !isHovered) return 0;
+        return 1;
+      });
+  }, [selectedNode, hoveredNode]);
 
   // Count items
   const partnersCount = graphData.nodes.filter(n => n.type === 'partner').length;
@@ -701,6 +759,40 @@ export default function RelationshipGraph({ businessName }: RelationshipGraphPro
             </button>
           </div>
 
+
+          {/* Mobile Floating Action Controls */}
+          <div className="xl:hidden absolute top-4 right-4 z-10 flex space-x-2">
+            <button
+              onClick={() => setShowMobileFilters(true)}
+              className="bg-white/90 backdrop-blur-md border border-slate-200/80 px-2.5 py-1.5 rounded-xl shadow-md text-slate-700 font-bold text-[10px] flex items-center space-x-1"
+            >
+              <Filter className="w-3.5 h-3.5 text-emerald-500" />
+              <span>Filters</span>
+            </button>
+          </div>
+
+          {(selectedNode || selectedLink) && (
+            <div className="xl:hidden absolute bottom-4 left-[150px] z-10">
+              <button
+                onClick={() => setShowMobileInspector(true)}
+                className="bg-white/90 backdrop-blur-md border border-slate-200/80 px-2.5 py-1.5 rounded-xl shadow-md text-slate-700 font-bold text-[10px] flex items-center space-x-1"
+              >
+                <Info className="w-3.5 h-3.5 text-emerald-500" />
+                <span>Details</span>
+              </button>
+            </div>
+          )}
+
+          <div className="xl:hidden absolute bottom-4 right-4 z-10">
+            <button
+              onClick={handleReset}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white p-2.5 rounded-full shadow-lg transition active:scale-95 flex items-center justify-center"
+              title="Reset Layout"
+            >
+              <RotateCcw className="w-4 h-4" />
+            </button>
+          </div>
+
           {/* Bottom inline legend */}
           <div className="absolute bottom-4 left-4 z-10 bg-white/95 backdrop-blur-md border border-slate-200/80 px-3.5 py-2.5 rounded-2xl shadow-md text-[9px] pointer-events-none select-none max-w-xs space-y-1.5">
             <span className="font-bold text-slate-400 uppercase tracking-wider block font-mono">Legend</span>
@@ -734,8 +826,8 @@ export default function RelationshipGraph({ businessName }: RelationshipGraphPro
         </div>
       </div>
 
-      {/* FILTERS & INSPECTOR PANEL (1 Col) */}
-      <div className="xl:col-span-1 flex flex-col space-y-4">
+      {/* DESKTOP FILTERS & INSPECTOR PANEL (Hidden on Mobile) */}
+      <div className="hidden xl:flex xl:col-span-1 flex-col space-y-4">
         
         {/* Filters Card */}
         <div className="bg-white border border-slate-200/80 p-5 rounded-3xl shadow-sm text-xs space-y-3">
@@ -846,6 +938,141 @@ export default function RelationshipGraph({ businessName }: RelationshipGraphPro
           </button>
         </div>
       </div>
+
+      {/* Mobile Drawer Overlay: Filters */}
+      {showMobileFilters && (
+        <div 
+          className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-[1000] xl:hidden flex items-end justify-center animate-in fade-in duration-200"
+          onClick={() => setShowMobileFilters(false)}
+        >
+          <div 
+            className="bg-white w-full rounded-t-3xl p-5 space-y-4 shadow-2xl max-h-[80vh] overflow-y-auto animate-in slide-in-from-bottom duration-250 pb-8"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex justify-between items-center pb-2.5 border-b border-slate-100">
+              <span className="font-extrabold text-slate-800 text-xs uppercase tracking-wider flex items-center space-x-2">
+                <Filter className="w-4 h-4 text-emerald-500" />
+                <span>Interactive Filters</span>
+              </span>
+              <button className="text-slate-400 hover:text-slate-600 font-extrabold p-1.5 text-xs" onClick={() => setShowMobileFilters(false)}>✕</button>
+            </div>
+
+            {/* Search bar */}
+            <div className="relative">
+              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" />
+              <input 
+                type="text"
+                placeholder="Search graph nodes..."
+                value={nodeSearchQuery}
+                onChange={(e) => setNodeSearchQuery(e.target.value)}
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-8 pr-3 py-2 text-xs outline-none focus:border-emerald-500 font-semibold"
+              />
+            </div>
+
+            <div className="space-y-2.5">
+              {[
+                { key: 'partner', label: 'Partners (Teal)', color: 'bg-teal-500' },
+                { key: 'competitor', label: 'Competitors (Orange)', color: 'bg-amber-500' },
+                { key: 'supplier', label: 'Suppliers (Indigo)', color: 'bg-indigo-500' },
+                { key: 'subsidiary', label: 'Subsidiaries (Blue)', color: 'bg-blue-500' },
+                { key: 'parent', label: 'Parent support (Grey)', color: 'bg-slate-500' }
+              ].map(f => (
+                <label key={f.key} className="flex items-center space-x-3 cursor-pointer font-semibold py-1.5 text-slate-600 hover:text-slate-800 text-xs">
+                  <input 
+                    type="checkbox"
+                    checked={activeFilters.includes(f.key)}
+                    onChange={() => toggleFilter(f.key)}
+                    className="rounded text-emerald-600 focus:ring-emerald-500 border-slate-300 w-4 h-4 cursor-pointer"
+                  />
+                  <span className={`w-2.5 h-2.5 rounded-full ${f.color} shrink-0`}></span>
+                  <span>{f.label}</span>
+                </label>
+              ))}
+            </div>
+            
+            <button 
+              onClick={() => { handleReset(); setShowMobileFilters(false); }}
+              className="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs uppercase tracking-wider py-2.5 rounded-xl transition"
+            >
+              Reset Filters
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Mobile Drawer Overlay: Entity Inspector */}
+      {showMobileInspector && (selectedNode || selectedLink) && (
+        <div 
+          className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-[1000] xl:hidden flex items-end justify-center animate-in fade-in duration-200"
+          onClick={() => setShowMobileInspector(false)}
+        >
+          <div 
+            className="bg-white w-full rounded-t-3xl p-5 space-y-4 shadow-2xl max-h-[80vh] overflow-y-auto animate-in slide-in-from-bottom duration-250 pb-8"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex justify-between items-center pb-2.5 border-b border-slate-100">
+              <span className="font-extrabold text-slate-800 text-xs uppercase tracking-wider flex items-center space-x-2">
+                <Info className="w-4 h-4 text-emerald-500" />
+                <span>Entity Inspector</span>
+              </span>
+              <button className="text-slate-400 hover:text-slate-600 font-extrabold p-1.5 text-xs" onClick={() => setShowMobileInspector(false)}>✕</button>
+            </div>
+
+            {selectedNode ? (
+              <div className="space-y-3.5 text-xs">
+                <div>
+                  <span className="text-slate-400 block text-[9px] uppercase font-bold tracking-wider font-mono">Node Name</span>
+                  <span className="font-extrabold text-slate-900 text-sm">{selectedNode.name}</span>
+                </div>
+                <div>
+                  <span className="text-slate-400 block text-[9px] uppercase font-bold tracking-wider font-mono">Ecosystem Role</span>
+                  <span className="font-bold text-emerald-600 uppercase tracking-wide bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100 inline-block text-[9px] mt-1">
+                    {selectedNode.type === 'corp' ? 'Main Twin HQ' : selectedNode.type}
+                  </span>
+                </div>
+                {selectedNode.description && (
+                  <div>
+                    <span className="text-slate-400 block text-[9px] uppercase font-bold tracking-wider font-mono">Scope Info</span>
+                    <p className="text-[11px] text-slate-600 mt-1 italic font-medium leading-relaxed">&ldquo;{selectedNode.description}&rdquo;</p>
+                  </div>
+                )}
+                {selectedNode.risk && (
+                  <div>
+                    <span className="text-slate-400 block text-[9px] uppercase font-bold tracking-wider font-mono">Audit Risk Index</span>
+                    <span className="font-extrabold font-mono mt-1 block text-red-500">{selectedNode.risk}% Exposure</span>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-3.5 text-xs">
+                <div>
+                  <span className="text-slate-400 block text-[9px] uppercase font-bold tracking-wider font-mono">Relationship Description</span>
+                  <span className="font-bold text-slate-900 text-xs">{selectedLink.relation}</span>
+                </div>
+                <div>
+                  <span className="text-slate-400 block text-[9px] uppercase font-bold tracking-wider font-mono">Relationship Type</span>
+                  <span className="font-bold text-teal-600 uppercase tracking-wide bg-teal-50 px-2 py-0.5 rounded border border-teal-100 inline-block text-[9px] mt-1">
+                    {selectedLink.type}
+                  </span>
+                </div>
+                {selectedLink.value && (
+                  <div>
+                    <span className="text-slate-400 block text-[9px] uppercase font-bold tracking-wider font-mono">Annual Volume Value</span>
+                    <span className="font-extrabold text-slate-900 font-mono text-sm block mt-1">{selectedLink.value}</span>
+                  </div>
+                )}
+              </div>
+            )}
+            
+            <button 
+              onClick={() => setShowMobileInspector(false)}
+              className="w-full bg-slate-900 text-white font-bold text-xs uppercase tracking-wider py-2.5 rounded-xl transition mt-4"
+            >
+              Dismiss Inspector
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

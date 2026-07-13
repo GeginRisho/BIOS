@@ -9,6 +9,14 @@ module.exports = {
   ],
   theme: {
     extend: {
+      screens: {
+        'xs': '320px',
+        'ip-mini': '375px',
+        'ip-pro': '390px',
+        'ip-max': '414px',
+        'xxl': '1440px',
+        '3xl': '1920px',
+      },
       colors: {
         indigo: colors.emerald,
         purple: colors.teal,

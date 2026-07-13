@@ -73,6 +73,7 @@ export default function PlanetaryMap({ onSelectBusiness, selectedId, businesses 
   const [selectedBiz, setSelectedBiz] = useState<any>(null);
   const [currentZoom, setCurrentZoom] = useState(2);
   const [mapInitialized, setMapInitialized] = useState(false);
+  const [showLegend, setShowLegend] = useState(false);
 
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<L.Map | null>(null);
@@ -416,7 +417,7 @@ export default function PlanetaryMap({ onSelectBusiness, selectedId, businesses 
   }, [activeBusinesses, selectedBiz, onSelectBusiness, currentZoom, selectedId, mapInitialized]);
 
   return (
-    <div className="grid grid-cols-1 xl:grid-cols-4 gap-6 h-[550px]">
+    <div className="grid grid-cols-1 xl:grid-cols-4 gap-6 h-auto xl:h-[550px]">
       
       <style>{`
         .leaflet-tooltip.custom-permanent-tooltip {
@@ -438,34 +439,45 @@ export default function PlanetaryMap({ onSelectBusiness, selectedId, businesses 
       `}</style>
 
       {/* MAP VIEWER PORT (3 Cols) */}
-      <div className="xl:col-span-3 rounded-3xl overflow-hidden border border-slate-200/80 bg-slate-50 relative h-full shadow-inner">
+      <div className="xl:col-span-3 rounded-3xl overflow-hidden border border-slate-200/80 bg-slate-50 relative h-[360px] xl:h-full shadow-inner">
         <div ref={containerRef} style={{ width: '100%', height: '100%' }} />
 
-        {/* Floating Legend Panel */}
-        <div className="absolute bottom-4 left-4 z-[999] bg-white/95 backdrop-blur-md border border-slate-200/80 px-4 py-3 rounded-xl shadow-lg pointer-events-none max-w-xs transition select-none text-[10px]">
-          <p className="text-[9px] uppercase font-bold tracking-wider text-slate-400 mb-2 font-mono">Relationship Legend</p>
-          <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-slate-600 font-semibold">
-            <div className="flex items-center space-x-2">
-              <span>🎯</span> <span className="text-red-500 font-bold">Selected</span>
+        {/* Floating Expandable Legend Button */}
+        <div className="absolute bottom-4 left-4 z-[999] flex flex-col items-start select-none">
+          {showLegend && (
+            <div className="bg-white/95 backdrop-blur-md border border-slate-200/80 px-4 py-3 rounded-xl shadow-lg text-[10px] mb-2 animate-in slide-in-from-bottom-2 duration-150">
+              <p className="text-[9px] uppercase font-bold tracking-wider text-slate-400 mb-2 font-mono">Relationship Legend</p>
+              <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-slate-600 font-semibold">
+                <div className="flex items-center space-x-2">
+                  <span>🎯</span> <span className="text-red-500 font-bold">Selected</span>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <span>🏢</span> <span className="text-blue-500">Nearby/Other</span>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <span>🤝</span> <span className="text-emerald-600 font-bold">Partners (Green)</span>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <span>⚔️</span> <span className="text-orange-500 font-bold">Competitors (Orange)</span>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <span>📦</span> <span className="text-purple-600 font-bold">Suppliers (Purple)</span>
+                </div>
+              </div>
             </div>
-            <div className="flex items-center space-x-2">
-              <span>🏢</span> <span className="text-blue-500">Nearby/Other</span>
-            </div>
-            <div className="flex items-center space-x-2">
-              <span>🤝</span> <span className="text-emerald-600 font-bold">Partners (Green)</span>
-            </div>
-            <div className="flex items-center space-x-2">
-              <span>⚔️</span> <span className="text-orange-500 font-bold">Competitors (Orange)</span>
-            </div>
-            <div className="flex items-center space-x-2">
-              <span>📦</span> <span className="text-purple-600 font-bold">Suppliers (Purple)</span>
-            </div>
-          </div>
+          )}
+          <button 
+            onClick={() => setShowLegend(!showLegend)}
+            className="bg-white hover:bg-slate-50 border border-slate-200/80 p-2 rounded-xl shadow-md text-slate-600 hover:text-slate-900 transition flex items-center space-x-1.5 text-[10px] font-bold pointer-events-auto"
+          >
+            <span>🗺️</span>
+            <span>{showLegend ? 'Hide Legend' : 'Show Legend'}</span>
+          </button>
         </div>
       </div>
 
-      {/* DETAILED DRILLDOWN PANEL (1 Col) */}
-      <div className="xl:col-span-1 rounded-3xl p-5 flex flex-col justify-between h-full bg-white border border-slate-200/80 overflow-y-auto shadow-sm">
+      {/* DETAILED DRILLDOWN PANEL (1 Col - Hidden on mobile if no business is selected) */}
+      <div className={`xl:col-span-1 rounded-3xl p-5 flex flex-col justify-between bg-white border border-slate-200/80 overflow-y-auto shadow-sm ${!selectedBiz ? 'hidden xl:flex' : 'flex'} h-[400px] xl:h-full`}>
         {selectedBiz ? (
           <div className="space-y-4 flex-1 flex flex-col justify-between">
             <div>

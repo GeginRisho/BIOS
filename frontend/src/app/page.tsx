@@ -1394,47 +1394,48 @@ export default function BIOSDashboard() {
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans select-none">
       
       {/* GLOBAL TOPBAR BRANDING */}
-      <header className="bg-white border-b border-slate-200/80 px-6 py-3.5 flex items-center justify-between shadow-xs relative z-40">
-        <div className="flex items-center space-x-3">
+      <header className="bg-white border-b border-slate-200/80 px-4 md:px-6 py-2.5 md:py-3.5 flex items-center justify-between shadow-xs relative z-40 select-none no-print">
+        <div className="flex items-center space-x-2 md:space-x-3 min-w-0">
           {/* Hamburger menu button for mobile devices */}
           <button 
             onClick={() => setMobileMenuOpen(true)}
-            className="md:hidden p-1.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-lg text-slate-600 hover:text-slate-800 transition"
+            className="md:hidden p-1.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-lg text-slate-600 hover:text-slate-800 transition shrink-0"
           >
-            <Menu className="w-5 h-5" />
+            <Menu className="w-4 h-4" />
           </button>
 
-          <div className="w-9 h-9 bg-indigo-600 rounded-xl flex items-center justify-center text-white font-extrabold shadow-sm select-none">
-            <Globe className="w-5 h-5 animate-pulse" />
+          <div className="w-7 h-7 md:w-9 md:h-9 bg-indigo-600 rounded-lg md:rounded-xl flex items-center justify-center text-white font-extrabold shadow-sm shrink-0">
+            <Globe className="w-4 h-4 md:w-5 md:h-5 animate-pulse" />
           </div>
-          <div>
-            <h1 className="text-sm font-extrabold text-slate-900 tracking-tight flex items-center space-x-2">
-              <span>BIOS Operating System</span>
-              <span className="text-[9px] bg-slate-100 text-slate-500 border border-slate-200 px-1.5 py-0.5 rounded font-mono uppercase tracking-wider">{user.role.replace('_', ' ')}</span>
+          <div className="min-w-0">
+            <h1 className="text-xs md:text-sm font-extrabold text-slate-900 tracking-tight flex items-center space-x-1 md:space-x-2 truncate">
+              <span className="hidden sm:inline">BIOS Operating System</span>
+              <span className="sm:hidden">BIOS</span>
+              <span className="text-[8px] md:text-[9px] bg-slate-100 text-slate-500 border border-slate-200 px-1 md:px-1.5 py-0.5 rounded font-mono uppercase tracking-wider shrink-0">{user.role.replace('_', ' ')}</span>
             </h1>
-            <p className="text-[10px] text-slate-400 font-semibold mt-0.5">Palantir Foundry / Bloomberg SaaS digital twin cluster</p>
+            <p className="hidden md:block text-[10px] text-slate-400 font-semibold mt-0.5">Palantir Foundry / Bloomberg SaaS digital twin cluster</p>
           </div>
         </div>
 
         {/* Dynamic Organization Swapper */}
-        <div className="flex items-center space-x-4">
-          <div className="flex items-center space-x-2 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-xl">
-            <Building className="w-4 h-4 text-indigo-500" />
+        <div className="flex items-center space-x-2 md:space-x-4 shrink-0">
+          <div className="flex items-center space-x-1 md:space-x-2 bg-slate-50 border border-slate-200 px-2 md:px-3 py-1 md:py-1.5 rounded-lg md:rounded-xl">
+            <Building className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
             <select
               value={activeOrg}
               onChange={(e) => setActiveOrg(e.target.value)}
-              className="bg-transparent border-0 outline-none text-xs font-bold text-slate-700 cursor-pointer"
+              className="bg-transparent border-0 outline-none text-[10px] md:text-xs font-bold text-slate-700 cursor-pointer max-w-[80px] sm:max-w-none"
             >
-              <option value="Apple Organization Console">Apple Organization Console</option>
-              <option value="Google Cloud Admin console">Google Cloud Admin console</option>
-              <option value="Microsoft Corp Enterprise">Microsoft Corp Enterprise</option>
-              <option value="Tesla Gigafactory Dashboard">Tesla Gigafactory Dashboard</option>
+              <option value="Apple Organization Console">Apple Org</option>
+              <option value="Google Cloud Admin console">Google Org</option>
+              <option value="Microsoft Corp Enterprise">Microsoft Org</option>
+              <option value="Tesla Gigafactory Dashboard">Tesla Org</option>
             </select>
           </div>
 
           {/* User badge */}
-          <div className="flex items-center space-x-2">
-            <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-extrabold text-xs">
+          <div className="flex items-center space-x-1.5 shrink-0">
+            <div className="w-7 h-7 md:w-8 md:h-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-extrabold text-[10px] md:text-xs">
               {user.email.charAt(0).toUpperCase()}
             </div>
             <div className="hidden md:block text-left">
@@ -1488,11 +1489,20 @@ export default function BIOSDashboard() {
                   })}
                 </div>
               </div>
-              <div className="bg-slate-50 border border-slate-200/80 p-3 rounded-2xl">
-                <div className="flex items-center space-x-2 text-[10px] font-bold text-slate-500">
-                  <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
-                  <span>SLA Service status active</span>
+              <div className="space-y-2">
+                <div className="bg-slate-50 border border-slate-200/80 p-3 rounded-2xl">
+                  <div className="flex items-center space-x-2 text-[10px] font-bold text-slate-500">
+                    <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
+                    <span>SLA Service status active</span>
+                  </div>
                 </div>
+                <button
+                  onClick={() => { setMobileMenuOpen(false); handleLogout(); }}
+                  className="w-full bg-red-50 hover:bg-red-100 border border-red-100 text-red-600 font-bold text-xs uppercase tracking-wider py-2.5 rounded-xl transition flex items-center justify-center space-x-1.5"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                  <span>Sign Out</span>
+                </button>
               </div>
             </div>
           </div>
@@ -1554,18 +1564,18 @@ export default function BIOSDashboard() {
         </nav>
 
         {/* DYNAMIC VIEWS WORKSPACE AREA */}
-        <main className="flex-1 p-6 overflow-y-auto relative bg-slate-50">
+        <main className="flex-1 p-4 md:p-6 overflow-y-auto relative bg-slate-50">
           
           {/* SEARCH HEADER */}
           {activeView !== 'settings' && activeView !== 'management' && (
             <div className="mb-6 max-w-3xl relative">
               <div className="bg-white border border-slate-200/80 rounded-2xl flex overflow-hidden shadow-sm hover:shadow-md transition focus-within:border-indigo-400">
-                <div className="flex-1 flex items-center px-4 space-x-2">
+                <div className="flex-1 flex items-center px-4 space-x-2 min-w-0">
                   <Search className="text-slate-400 w-4 h-4 shrink-0" />
                   <input 
                     type="text"
-                    placeholder="Search global database twins by Name, CEO, Industry, Country..."
-                    className="w-full bg-transparent border-0 outline-none text-slate-800 placeholder-slate-400 py-3 text-xs font-semibold"
+                    placeholder="Search global database twins by name, CEO, industry..."
+                    className="w-full bg-transparent border-0 outline-none text-slate-800 placeholder-slate-400 py-3 text-xs font-semibold truncate"
                     value={searchQuery}
                     onFocus={() => setShowSuggestions(true)}
                     onChange={(e) => setSearchQuery(e.target.value)}
@@ -1574,9 +1584,10 @@ export default function BIOSDashboard() {
                 </div>
                 <button 
                   onClick={() => handleQuery(searchQuery)}
-                  className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 font-bold text-[10px] uppercase tracking-wider transition"
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 sm:px-5 font-bold text-[10px] uppercase tracking-wider transition shrink-0 flex items-center justify-center"
                 >
-                  Scan Database
+                  <span className="hidden sm:inline">Scan Database</span>
+                  <Search className="sm:hidden w-4 h-4" />
                 </button>
               </div>
 
@@ -1603,7 +1614,7 @@ export default function BIOSDashboard() {
           {/* VIEW: PLANETARY MAP CONTAINER */}
           <div className={activeView === 'map' ? 'block' : 'hidden'}>
             <div className="space-y-4 animate-in fade-in duration-200">
-              <div className="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-sm">
+              <div className="bg-white rounded-3xl p-4 md:p-6 border border-slate-200/80 shadow-sm">
                 <div className="mb-4">
                   <h2 className="text-base font-extrabold text-slate-900 flex items-center space-x-2">
                     <Globe className="text-indigo-500 w-5 h-5" />
@@ -1628,7 +1639,7 @@ export default function BIOSDashboard() {
           <div className={activeView === 'graph' ? 'block' : 'hidden'}>
             {activeView === 'graph' && (
               <div className="space-y-4 animate-in fade-in duration-200">
-                <div className="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-sm">
+                <div className="bg-white rounded-3xl p-4 md:p-6 border border-slate-200/80 shadow-sm">
                   <div className="mb-4">
                     <h2 className="text-base font-extrabold text-slate-900 flex items-center space-x-2">
                       <Share2 className="text-indigo-500 w-5 h-5" />
@@ -1825,7 +1836,7 @@ export default function BIOSDashboard() {
                   Dispatch natural language operational queries down to the 16-agent orchestrator swarm. BIOS will deploy agents to plan, scrape, map, forecast, and report analysis results.
                 </p>
 
-                <div className="flex space-x-3">
+                <div className="flex flex-col sm:flex-row gap-3">
                   <input 
                     type="text"
                     disabled={isSwarmRunning}
@@ -2364,7 +2375,8 @@ export default function BIOSDashboard() {
                 </div>
 
                 {/* Table GRID */}
-                <div className="overflow-x-auto border border-slate-200 rounded-2xl shadow-inner bg-slate-50">
+                {/* Desktop View Table */}
+                <div className="hidden md:block overflow-x-auto border border-slate-200 rounded-2xl shadow-inner bg-slate-50">
                   <table className="w-full text-left border-collapse text-xs">
                     <thead>
                       <tr className="bg-slate-100 border-b border-slate-200 text-slate-500 font-bold uppercase tracking-wider">
@@ -2418,6 +2430,55 @@ export default function BIOSDashboard() {
                       ))}
                     </tbody>
                   </table>
+                </div>
+
+                {/* Mobile View Cards (< 768px) */}
+                <div className="grid grid-cols-1 gap-4 md:hidden">
+                  {paginatedCrmList.map((biz) => (
+                    <div key={biz.id} className="bg-white border border-slate-200 p-4 rounded-2xl shadow-sm space-y-2.5">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <h4 className="font-bold text-slate-900 text-sm">{biz.name}</h4>
+                          <p className="text-[10px] text-slate-400 font-semibold mt-0.5">{biz.city}, {biz.country} | {biz.industry}</p>
+                        </div>
+                        <span className="px-2 py-0.5 bg-emerald-50 border border-emerald-100 text-emerald-600 text-[9px] rounded font-extrabold uppercase shrink-0">
+                          {biz.status || "Verified Twin"}
+                        </span>
+                      </div>
+                      
+                      <div className="grid grid-cols-2 gap-2 text-xs font-semibold text-slate-600 border-t border-b border-slate-100 py-2">
+                        <div>
+                          <span className="text-[8px] uppercase text-slate-400 block font-mono">CEO</span>
+                          <span>{biz.ceo ?? "N/A"}</span>
+                        </div>
+                        <div>
+                          <span className="text-[8px] uppercase text-slate-400 block font-mono">Revenue ($B)</span>
+                          <span className="font-mono text-slate-900 font-bold">{biz.revenue ? `$${biz.revenue}B` : "N/A"}</span>
+                        </div>
+                      </div>
+
+                      <div className="flex justify-end space-x-3 text-xs pt-1">
+                        <button 
+                          onClick={() => { setSelectedBiz(biz); setActiveView('map'); }}
+                          className="text-indigo-600 hover:text-indigo-900 font-bold hover:underline"
+                        >
+                          View
+                        </button>
+                        <button 
+                          onClick={() => handleEditClick(biz)}
+                          className="text-slate-600 hover:text-slate-900 font-bold hover:underline"
+                        >
+                          Edit
+                        </button>
+                        <button 
+                          onClick={() => handleDeleteCompany(biz.id)}
+                          className="text-red-500 hover:text-red-900 font-bold hover:underline"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  ))}
                 </div>
 
                 {/* CRM Pagination */}
@@ -2969,7 +3030,8 @@ export default function BIOSDashboard() {
                   </div>
                 </div>
 
-                <div className="overflow-x-auto border border-slate-200 rounded-2xl bg-slate-50">
+                {/* Desktop View Table */}
+                <div className="hidden md:block overflow-x-auto border border-slate-200 rounded-2xl bg-slate-50">
                   <table className="w-full text-left border-collapse text-xs">
                     <thead>
                       <tr className="bg-slate-100 border-b border-slate-200 text-slate-500 font-bold uppercase tracking-wider">
@@ -3010,6 +3072,43 @@ export default function BIOSDashboard() {
                       ))}
                     </tbody>
                   </table>
+                </div>
+
+                {/* Mobile View Cards (< 768px) */}
+                <div className="grid grid-cols-1 gap-4 md:hidden">
+                  {managedUsers.filter((u: any) => {
+                    const searchLower = userSearchQuery.toLowerCase();
+                    const matchesSearch = !userSearchQuery ||
+                      (u.email && u.email.toLowerCase().includes(searchLower)) ||
+                      (u.full_name && u.full_name.toLowerCase().includes(searchLower));
+                    const matchesRole = userFilterRole === "All" || u.role === userFilterRole;
+                    const statusStr = u.is_active ? "Active" : "Suspended";
+                    const matchesStatus = userFilterStatus === "All" || statusStr === userFilterStatus;
+                    return matchesSearch && matchesRole && matchesStatus;
+                  }).map((u) => (
+                    <div key={u.id} className="bg-white border border-slate-200 p-4 rounded-2xl shadow-sm space-y-2.5">
+                      <div className="flex justify-between items-start">
+                        <div className="min-w-0">
+                          <h4 className="font-bold text-slate-900 text-xs truncate">{u.email}</h4>
+                          <p className="text-[10px] text-slate-400 font-semibold mt-0.5">{u.full_name || "No Name Assigned"}</p>
+                        </div>
+                        <span className={`px-2 py-0.5 text-[9px] rounded font-extrabold ${u.is_active ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-500'} shrink-0`}>
+                          {u.is_active ? 'Active' : 'Suspended'}
+                        </span>
+                      </div>
+                      
+                      <div className="flex justify-between items-center text-xs font-semibold text-slate-600 border-t pt-2.5">
+                        <div>
+                          <span className="text-[8px] uppercase text-slate-400 block font-mono">Assigned Role</span>
+                          <span className="uppercase text-[9px] font-mono text-indigo-600 font-bold">{u.role}</span>
+                        </div>
+                        <div className="flex space-x-3 text-xs font-bold">
+                          <button onClick={() => handleEditUser(u)} className="text-slate-600 hover:text-slate-950 hover:underline">Edit</button>
+                          <button onClick={() => handleDeleteUser(u.id)} className="text-red-500 hover:text-red-900 hover:underline">Delete</button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
 
