@@ -21,12 +21,6 @@ for p in (_backend_dir, _parent_dir):
     if p not in sys.path:
         sys.path.insert(0, p)
 
-_symlink = os.path.join(_backend_dir, "backend")
-if not os.path.lexists(_symlink):
-    try:
-        os.symlink(".", _symlink)
-    except Exception:
-        pass
 
 # ---------------------------------------------------------------------------
 from fastapi import FastAPI, Request

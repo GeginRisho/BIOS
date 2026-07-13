@@ -11,18 +11,9 @@ set -e
 APP_DIR="$(cd "$(dirname "$0")" && pwd)"
 echo "[start.sh] APP_DIR = $APP_DIR"
 
-SYMLINK="$APP_DIR/backend"
-
-if [ ! -L "$SYMLINK" ] && [ ! -d "$SYMLINK" ]; then
-    echo "[start.sh] Creating backend -> . symlink at $SYMLINK"
-    ln -sf "$APP_DIR" "$SYMLINK"
-    echo "[start.sh] Symlink created."
-else
-    echo "[start.sh] backend symlink/dir already exists at $SYMLINK"
-fi
-
-# Export so child processes can find the backend package
-export PYTHONPATH="$APP_DIR:$PYTHONPATH"
+# Export parent directory of backend so child processes can resolve "backend.services"
+PARENT_DIR="$(dirname "$APP_DIR")"
+export PYTHONPATH="$PARENT_DIR:$APP_DIR:$PYTHONPATH"
 echo "[start.sh] PYTHONPATH = $PYTHONPATH"
 
 echo "[start.sh] Starting BIOS Unified API (single-process)..."

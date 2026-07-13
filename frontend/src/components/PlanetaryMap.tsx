@@ -66,14 +66,36 @@ interface MapProps {
   onSelectBusiness: (biz: any) => void;
   selectedId: string | null;
   businesses?: any[];
+  mobileMenuOpen?: boolean;
 }
 
-export default function PlanetaryMap({ onSelectBusiness, selectedId, businesses }: MapProps) {
+export default function PlanetaryMap({ onSelectBusiness, selectedId, businesses, mobileMenuOpen }: MapProps) {
   const activeBusinesses = businesses && businesses.length > 0 ? businesses : SEED_COMPANIES;
   const [selectedBiz, setSelectedBiz] = useState<any>(null);
   const [currentZoom, setCurrentZoom] = useState(2);
   const [mapInitialized, setMapInitialized] = useState(false);
   const [showLegend, setShowLegend] = useState(false);
+
+  // Disable all map interactions when mobile drawer is open to prevent touch event leaks
+  useEffect(() => {
+    if (!mapRef.current) return;
+    const map = mapRef.current;
+    if (mobileMenuOpen) {
+      map.dragging.disable();
+      map.touchZoom.disable();
+      map.scrollWheelZoom.disable();
+      map.doubleClickZoom.disable();
+      map.boxZoom.disable();
+      map.keyboard.disable();
+    } else {
+      map.dragging.enable();
+      map.touchZoom.enable();
+      map.scrollWheelZoom.enable();
+      map.doubleClickZoom.enable();
+      map.boxZoom.enable();
+      map.keyboard.enable();
+    }
+  }, [mobileMenuOpen, mapInitialized]);
 
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<L.Map | null>(null);

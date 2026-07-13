@@ -1820,7 +1820,7 @@ export default function BIOSDashboard() {
         </nav>
 
         {/* DYNAMIC VIEWS WORKSPACE AREA */}
-        <main className="flex-1 p-4 md:p-6 overflow-y-auto relative bg-slate-50">
+        <main className={`flex-1 p-4 md:p-6 overflow-y-auto relative bg-slate-50 ${mobileMenuOpen ? 'hidden xl:block' : 'block'}`}>
           
           {/* SEARCH HEADER */}
           {activeView !== 'settings' && activeView !== 'management' && (
@@ -1891,6 +1891,7 @@ export default function BIOSDashboard() {
                       onSelectBusiness={(biz) => setSelectedBiz(biz)} 
                       selectedId={selectedBiz?.id ?? null} 
                       businesses={businesses}
+                      mobileMenuOpen={mobileMenuOpen}
                     />
                   )}
                 </ErrorBoundary>
@@ -1913,7 +1914,7 @@ export default function BIOSDashboard() {
 
                   {selectedBiz ? (
                     <ErrorBoundary fallbackLabel="Relationship Network Graph Error">
-                      <RelationshipGraph businessName={selectedBiz.name} />
+                      <RelationshipGraph businessName={selectedBiz.name} mobileMenuOpen={mobileMenuOpen} />
                     </ErrorBoundary>
                   ) : (
                     <div className="w-full h-[450px] bg-slate-50 border border-slate-200/80 rounded-2xl flex flex-col items-center justify-center text-center p-6">

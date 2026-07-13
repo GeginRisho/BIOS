@@ -23,6 +23,7 @@ interface Link extends d3.SimulationLinkDatum<Node> {
 
 interface RelationshipGraphProps {
   businessName: string;
+  mobileMenuOpen?: boolean;
 }
 
 // Deterministic string hashing to seed initial coordinates
@@ -43,7 +44,7 @@ function getSeededPosition(id: string, index: number, total: number, width: numb
   };
 }
 
-export default function RelationshipGraph({ businessName }: RelationshipGraphProps) {
+export default function RelationshipGraph({ businessName, mobileMenuOpen }: RelationshipGraphProps) {
   const svgRef = useRef<SVGSVGElement>(null);
   const zoomRef = useRef<any>(null);
   const simulationRef = useRef<any>(null);
@@ -353,13 +354,13 @@ export default function RelationshipGraph({ businessName }: RelationshipGraphPro
     if (!svgRef.current || !zoomRef.current || filteredNodes.length === 0) return;
     const svg = d3.select(svgRef.current);
     
-    if (layoutMode === 'mobile') {
-      // Mobile auto-centering: fit all nodes into viewport with 40px margin padding
+    if (layoutMode === 'mobile' || layoutMode === 'tablet') {
+      // Fit all nodes into viewport with 28px padding to occupy 85-90% of available canvas
       let minX = Infinity, maxX = -Infinity;
       let minY = Infinity, maxY = -Infinity;
       
       filteredNodes.forEach((d) => {
-        const r = (d.valueSize ?? 24) * 0.8;
+        const r = layoutMode === 'mobile' ? (d.valueSize ?? 24) * 0.8 : (d.valueSize ?? 24);
         if (d.x !== undefined && d.y !== undefined) {
           minX = Math.min(minX, d.x - r);
           maxX = Math.max(maxX, d.x + r);
@@ -372,10 +373,16 @@ export default function RelationshipGraph({ businessName }: RelationshipGraphPro
       const graphH = maxY - minY;
       
       if (graphW > 0 && graphH > 0) {
-        const padding = 40;
-        const scaleX = width / (graphW + padding * 2);
-        const scaleY = height / (graphH + padding * 2);
-        const scale = Math.min(2.5, Math.max(0.4, Math.min(scaleX, scaleY)));
+        const padding = 28; // 24-32px padding
+        const scaleX = (width - padding * 2) / graphW;
+        const scaleY = (height - padding * 2) / graphH;
+        let scale = Math.min(scaleX, scaleY);
+        
+        if (scale >= 1.0) {
+          scale = 1.0; // Do not shrink unless it exceeds the canvas
+        } else {
+          scale = scale * 0.88; // Scale to occupy 85-90% (88%) of viewport
+        }
         
         const centerX = (minX + maxX) / 2;
         const centerY = (minY + maxY) / 2;
@@ -402,10 +409,10 @@ export default function RelationshipGraph({ businessName }: RelationshipGraphPro
     }
   };
 
-  // Center the graph automatically after data, viewport, selection or filter changes
+  // Center the graph automatically after data, viewport, selection, filters or drawer changes
   useEffect(() => {
     fitGraph(selectedNode);
-  }, [selectedNode, layoutMode, businessName, activeFilters, filteredNodes, filteredLinks]);
+  }, [selectedNode, layoutMode, businessName, activeFilters, filteredNodes, filteredLinks, mobileMenuOpen]);
 
   // Initialize and run simulation
   useEffect(() => {

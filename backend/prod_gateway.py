@@ -14,22 +14,12 @@ from starlette.background import BackgroundTask
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("prod_gateway")
 
-# Create a symlink 'backend -> .' in the current directory if it does not exist.
-# This ensures that absolute imports starting with 'backend.' resolve correctly
-# when deployed to Render where the root directory is set to 'backend' (meaning the
-# files are in the root of the container and the 'backend' folder prefix is lost).
+# Ensure parent directory is in sys.path so "backend" package imports resolve correctly
 backend_dir_global = os.path.dirname(os.path.abspath(__file__))
-symlink_path_global = os.path.join(backend_dir_global, "backend")
-if not os.path.lexists(symlink_path_global):
-    try:
-        if os.name == "nt":
-            # On Windows, create a directory junction
-            subprocess.run(["cmd", "/c", f"mklink /J \"{symlink_path_global}\" \"{backend_dir_global}\""], capture_output=True)
-        else:
-            os.symlink(".", symlink_path_global)
-        logger.info(f"Created 'backend' symlink/junction: {symlink_path_global} -> {backend_dir_global}")
-    except Exception as e:
-        logger.warning(f"Could not create 'backend' symlink/junction: {e}")
+parent_dir_global = os.path.dirname(backend_dir_global)
+for p in (backend_dir_global, parent_dir_global):
+    if p not in sys.path:
+        sys.path.insert(0, p)
 
 app = FastAPI(title="BIOS Production Gateway Proxy")
 
@@ -86,30 +76,7 @@ def start_services():
     env["PYTHONUNBUFFERED"] = "1"
     sep = ";" if os.name == "nt" else ":"
 
-    # ---------------------------------------------------------------
-    # Ensure a "backend" symlink exists inside backend_dir so that
-    # absolute imports like "backend.services.X" resolve correctly.
-    # On Render, rootDirectory=backend means backend_dir IS the app
-    # root — there is no parent "backend" folder.  The symlink makes
-    # backend_dir/backend -> backend_dir so the package resolves.
-    # ---------------------------------------------------------------
-    symlink_path = os.path.join(backend_dir, "backend")
-    if not os.path.lexists(symlink_path):
-        try:
-            if os.name == "nt":
-                subprocess.run(
-                    ["cmd", "/c", f'mklink /J "{symlink_path}" "{backend_dir}"'],
-                    capture_output=True
-                )
-            else:
-                os.symlink(backend_dir, symlink_path)
-            logger.info(f"[start_services] Created 'backend' symlink: {symlink_path}")
-        except Exception as e:
-            logger.warning(f"[start_services] Could not create symlink: {e}")
-
-    # With the symlink in place, use backend_dir as the CWD.
-    # PYTHONPATH includes backend_dir so "import backend.X" resolves
-    # through the symlink.
+    # PYTHONPATH includes parent_dir so "import backend.X" resolves directly.
     cwd_dir = backend_dir
     current_pythonpath = env.get("PYTHONPATH", "")
     env["PYTHONPATH"] = f"{backend_dir}{sep}{parent_dir}{sep}{current_pythonpath}"
