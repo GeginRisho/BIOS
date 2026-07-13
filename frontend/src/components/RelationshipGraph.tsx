@@ -353,8 +353,8 @@ export default function RelationshipGraph({ businessName }: RelationshipGraphPro
     if (!svgRef.current || !zoomRef.current || filteredNodes.length === 0) return;
     const svg = d3.select(svgRef.current);
     
-    if (isMobile) {
-      // Mobile auto-centering: fit all nodes into viewport with 16px padding
+    if (layoutMode === 'mobile') {
+      // Mobile auto-centering: fit all nodes into viewport with 40px margin padding
       let minX = Infinity, maxX = -Infinity;
       let minY = Infinity, maxY = -Infinity;
       
@@ -372,7 +372,7 @@ export default function RelationshipGraph({ businessName }: RelationshipGraphPro
       const graphH = maxY - minY;
       
       if (graphW > 0 && graphH > 0) {
-        const padding = 16;
+        const padding = 40;
         const scaleX = width / (graphW + padding * 2);
         const scaleY = height / (graphH + padding * 2);
         const scale = Math.min(2.5, Math.max(0.4, Math.min(scaleX, scaleY)));
@@ -402,10 +402,10 @@ export default function RelationshipGraph({ businessName }: RelationshipGraphPro
     }
   };
 
-  // Center the graph automatically after selection changes
+  // Center the graph automatically after data, viewport, selection or filter changes
   useEffect(() => {
     fitGraph(selectedNode);
-  }, [selectedNode, isMobile]);
+  }, [selectedNode, layoutMode, businessName, activeFilters, filteredNodes, filteredLinks]);
 
   // Initialize and run simulation
   useEffect(() => {
@@ -484,12 +484,12 @@ export default function RelationshipGraph({ businessName }: RelationshipGraphPro
 
     // Force simulation configurations (strong collision & constraints for clean positions)
     const simulation = d3.forceSimulation<Node>(filteredNodes)
-      .force("link", d3.forceLink<Node, Link>(filteredLinks).id((d) => d.id).distance(180))
-      .force("charge", d3.forceManyBody().strength(-800))
+      .force("link", d3.forceLink<Node, Link>(filteredLinks).id((d) => d.id).distance(layoutMode === 'mobile' ? 120 : 180))
+      .force("charge", d3.forceManyBody().strength(layoutMode === 'mobile' ? -400 : -800))
       .force("center", d3.forceCenter(width / 2, height / 2))
       .force("collision", d3.forceCollide().radius((d: any) => {
-        const baseSize = isMobile ? (d.valueSize ?? 24) * 0.8 : (d.valueSize ?? 24);
-        return baseSize + (layoutMode === 'mobile' ? 25 : 54);
+        const baseSize = layoutMode === 'mobile' ? (d.valueSize ?? 24) * 0.8 : (d.valueSize ?? 24);
+        return baseSize + (layoutMode === 'mobile' ? 20 : 54);
       }))
       .alphaDecay(0.06);
 
@@ -780,8 +780,8 @@ export default function RelationshipGraph({ businessName }: RelationshipGraphPro
       </div>
 
       {/* GRAPH CANVAS (3 Cols) */}
-      <div className="xl:col-span-3 flex flex-col space-y-4 relative">
-        <div className="rounded-3xl border border-slate-200/80 bg-slate-50 relative h-[450px] shadow-inner overflow-hidden">
+      <div className="xl:col-span-3 flex flex-col space-y-4 relative w-full max-w-full overflow-hidden">
+        <div className="rounded-3xl border border-slate-200/80 bg-slate-50 relative h-[420px] md:h-[500px] xl:h-[650px] shadow-inner overflow-hidden w-full max-w-full">
           
           {isLoading && (
             <div className="absolute inset-0 bg-slate-50/70 backdrop-blur-sm z-20 flex items-center justify-center">
@@ -795,7 +795,14 @@ export default function RelationshipGraph({ businessName }: RelationshipGraphPro
             </div>
           )}
 
-          <svg ref={svgRef} className="w-full h-full" />
+          <svg 
+            ref={svgRef} 
+            width="100%" 
+            height="100%" 
+            viewBox={`0 0 ${width} ${height}`} 
+            preserveAspectRatio="xMidYMid meet"
+            className="w-full h-full block" 
+          />
 
           {/* Floating Tooltip */}
           {hoveredNode && (
@@ -867,7 +874,7 @@ export default function RelationshipGraph({ businessName }: RelationshipGraphPro
           </div>
 
           {(selectedNode || selectedLink) && (
-            <div className="xl:hidden absolute bottom-4 left-[16px] z-10">
+            <div className="xl:hidden absolute bottom-4 left-[140px] z-10">
               <button
                 onClick={() => setShowMobileInspector(true)}
                 className="bg-white/90 backdrop-blur-md border border-slate-200/80 px-3 rounded-xl shadow-md text-slate-700 font-bold text-[10px] flex items-center space-x-1.5 h-11 shrink-0 cursor-pointer"

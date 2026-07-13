@@ -56,3 +56,6 @@ pnpm-debug.log*
 # OS Files
 .DS_Store
 Thumbs.db
+
+# Dynamic runtime links
+backend/backend
