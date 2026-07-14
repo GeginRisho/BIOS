@@ -212,7 +212,7 @@ async def refresh_token(body: RefreshTokenRequest, db: AsyncSession = Depends(ge
         )
     
     # Load user
-    stmt = select(User).where(User.id == user_id)
+    stmt = select(User).where(User.id == uuid.UUID(user_id))
     result = await db.execute(stmt)
     user = result.scalars().first()
     if not user:
