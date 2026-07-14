@@ -76,20 +76,37 @@ export default function RelationshipGraph({ businessName, mobileMenuOpen }: Rela
   const preFullscreenTransformRef = useRef<any>(null);
 
   const handleEnterFullscreen = () => {
+    if (simulationRef.current) simulationRef.current.stop();
     preFullscreenTransformRef.current = transformRef.current;
+    transformRef.current = null;
+    filteredNodes.forEach((node) => {
+      node.x = undefined;
+      node.y = undefined;
+      node.fx = undefined;
+      node.fy = undefined;
+    });
     setIsFullscreen(true);
   };
 
   const handleExitFullscreen = () => {
+    if (simulationRef.current) simulationRef.current.stop();
+    transformRef.current = null;
+    filteredNodes.forEach((node) => {
+      node.x = undefined;
+      node.y = undefined;
+      node.fx = undefined;
+      node.fy = undefined;
+    });
     setIsFullscreen(false);
     setTimeout(() => {
       if (svgRef.current && zoomRef.current && preFullscreenTransformRef.current) {
+        transformRef.current = preFullscreenTransformRef.current;
         d3.select(svgRef.current)
           .transition()
           .duration(500)
           .call(zoomRef.current.transform, preFullscreenTransformRef.current);
       }
-    }, 50);
+    }, 100);
   };
 
   const [width, setWidth] = useState(800);
@@ -433,7 +450,7 @@ export default function RelationshipGraph({ businessName, mobileMenuOpen }: Rela
     if (!svgRef.current || !zoomRef.current || filteredNodes.length === 0) return;
     const svg = d3.select(svgRef.current);
     
-    const isMobileOrTablet = layoutMode === 'mobile' || layoutMode === 'tablet' || window.innerWidth < 1280;
+    const isMobileOrTablet = layoutMode === 'mobile' || layoutMode === 'tablet' || window.innerWidth < 1280 || isFullscreen;
     
     if (isMobileOrTablet) {
       let minX = Infinity, maxX = -Infinity;
@@ -442,11 +459,12 @@ export default function RelationshipGraph({ businessName, mobileMenuOpen }: Rela
       filteredNodes.forEach((d) => {
         if (d.x !== undefined && d.y !== undefined) {
           const r = layoutMode === 'mobile' ? (d.valueSize ?? 24) * 0.8 : (d.valueSize ?? 24);
-          // Apply margins to bounds check to account for labels & selection rings
-          minX = Math.min(minX, d.x - r - 25);
-          maxX = Math.max(maxX, d.x + r + 25);
-          minY = Math.min(minY, d.y - r - 10);
-          maxY = Math.max(maxY, d.y + r + 30);
+          // Keep a small padding (20-24px, target 22px)
+          const padding = 22;
+          minX = Math.min(minX, d.x - r - padding);
+          maxX = Math.max(maxX, d.x + r + padding);
+          minY = Math.min(minY, d.y - r - padding);
+          maxY = Math.max(maxY, d.y + r + padding);
         }
       });
       
@@ -520,15 +538,21 @@ export default function RelationshipGraph({ businessName, mobileMenuOpen }: Rela
         
         // Hide labels at low zoom, except selected/hovered ones
         const scale = event.transform.k;
-        svg.selectAll(".node-label").style("opacity", (d: any) => {
-          const isSelected = selectedNode?.id === d.id;
-          const isHovered = hoveredNode?.id === d.id;
-          if (isSelected || isHovered || scale >= 0.75) return 1;
-          return 0;
-        });
-        
-        // Hide edge labels at low zoom on mobile/tablet to avoid clutter
-        svg.selectAll(".edge-label").style("opacity", (layoutMode === 'mobile' || layoutMode === 'tablet') ? (scale >= 0.85 ? 1 : 0) : 1);
+        const isMobileOrTablet = layoutMode === 'mobile' || layoutMode === 'tablet' || window.innerWidth < 1280 || isFullscreen;
+        if (isMobileOrTablet) {
+          svg.selectAll(".node-label").style("opacity", (d: any) => {
+            const isSelected = selectedNode?.id === d.id;
+            const isHovered = hoveredNode?.id === d.id;
+            if (isSelected || isHovered || scale >= 0.8) return 1;
+            return 0;
+          });
+          
+          // Hide edge labels at low zoom on mobile/tablet to avoid clutter
+          svg.selectAll(".edge-label").style("opacity", scale >= 0.8 ? 1 : 0);
+        } else {
+          svg.selectAll(".node-label").style("opacity", 1);
+          svg.selectAll(".edge-label").style("opacity", 1);
+        }
       });
 
     zoomRef.current = zoomBehavior;
@@ -840,6 +864,7 @@ export default function RelationshipGraph({ businessName, mobileMenuOpen }: Rela
     // Timeout safety for the loading spinner
     const loaderTimeout = setTimeout(() => {
       setIsLoading(false);
+      fitGraph(selectedNode);
     }, 850);
 
     function dragstarted(event: any, d: Node) {
@@ -876,7 +901,7 @@ export default function RelationshipGraph({ businessName, mobileMenuOpen }: Rela
 
     // Dynamic zoom label visibility helper
     const currentScale = transformRef.current?.k ?? 1;
-    const isMobileOrTablet = layoutMode === 'mobile' || layoutMode === 'tablet' || window.innerWidth < 1280;
+    const isMobileOrTablet = layoutMode === 'mobile' || layoutMode === 'tablet' || window.innerWidth < 1280 || isFullscreen;
 
     if (isMobileOrTablet) {
       d3.select(svgRef.current)
@@ -884,7 +909,7 @@ export default function RelationshipGraph({ businessName, mobileMenuOpen }: Rela
         .style("opacity", (d: any) => {
           const isSelected = selectedNode?.id === d.id;
           const isHovered = hoveredNode?.id === d.id;
-          if (isSelected || isHovered || currentScale > 0.8) return 1;
+          if (isSelected || isHovered || currentScale >= 0.8) return 1;
           return 0;
         })
         .text((d: any) => {
@@ -909,7 +934,7 @@ export default function RelationshipGraph({ businessName, mobileMenuOpen }: Rela
         .selectAll(".edge-label")
         .style("opacity", 1);
     }
-  }, [selectedNode, hoveredNode, layoutMode]);
+  }, [selectedNode, hoveredNode, layoutMode, isFullscreen]);
 
   // Count items
   const partnersCount = graphData.nodes.filter(n => n.type === 'partner').length;
