@@ -71,9 +71,11 @@ export default function RelationshipGraph({ businessName, mobileMenuOpen }: Rela
   const [showLegend, setShowLegend] = useState(false);
   const [layoutMode, setLayoutMode] = useState<'mobile' | 'tablet' | 'desktop'>('desktop');
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [showRelationships, setShowRelationships] = useState(false);
   const containerWrapperRef = useRef<HTMLDivElement>(null);
 
   const preFullscreenTransformRef = useRef<any>(null);
+  const isExitingFullscreenRef = useRef(false);
 
   const handleEnterFullscreen = () => {
     if (simulationRef.current) simulationRef.current.stop();
@@ -89,24 +91,20 @@ export default function RelationshipGraph({ businessName, mobileMenuOpen }: Rela
   };
 
   const handleExitFullscreen = () => {
-    if (simulationRef.current) simulationRef.current.stop();
-    transformRef.current = null;
-    filteredNodes.forEach((node) => {
-      node.x = undefined;
-      node.y = undefined;
-      node.fx = undefined;
-      node.fy = undefined;
-    });
+    isExitingFullscreenRef.current = true;
     setIsFullscreen(false);
     setTimeout(() => {
       if (svgRef.current && zoomRef.current && preFullscreenTransformRef.current) {
         transformRef.current = preFullscreenTransformRef.current;
         d3.select(svgRef.current)
           .transition()
-          .duration(500)
+          .duration(600)
           .call(zoomRef.current.transform, preFullscreenTransformRef.current);
       }
-    }, 100);
+      setTimeout(() => {
+        isExitingFullscreenRef.current = false;
+      }, 700);
+    }, 150);
   };
 
   const [width, setWidth] = useState(800);
@@ -182,6 +180,27 @@ export default function RelationshipGraph({ businessName, mobileMenuOpen }: Rela
   }, [isFullscreen]);
 
   const isMobile = layoutMode === 'mobile';
+
+  const isLinkLabelVisible = (d: any) => {
+    if (showRelationships) return true;
+    
+    const srcId = typeof d.source === 'object' ? d.source.id : d.source;
+    const tgtId = typeof d.target === 'object' ? d.target.id : d.target;
+    
+    if (selectedNode && (selectedNode.id === srcId || selectedNode.id === tgtId)) {
+      return true;
+    }
+    
+    if (selectedLink) {
+      const selSrcId = typeof selectedLink.source === 'object' ? selectedLink.source.id : selectedLink.source;
+      const selTgtId = typeof selectedLink.target === 'object' ? selectedLink.target.id : selectedLink.target;
+      if (selSrcId === srcId && selTgtId === tgtId) {
+        return true;
+      }
+    }
+    
+    return false;
+  };
 
   // Enterprise styling color definitions
   const relationshipColors: Record<string, string> = {
@@ -449,7 +468,7 @@ export default function RelationshipGraph({ businessName, mobileMenuOpen }: Rela
   };
 
   const fitGraph = (targetNode?: Node | null) => {
-    if (!svgRef.current || !zoomRef.current || filteredNodes.length === 0) return;
+    if (!svgRef.current || !zoomRef.current || filteredNodes.length === 0 || isExitingFullscreenRef.current) return;
     const svg = d3.select(svgRef.current);
     
     const isMobileOrTablet = layoutMode === 'mobile' || layoutMode === 'tablet' || window.innerWidth < 1280 || isFullscreen;
@@ -461,8 +480,8 @@ export default function RelationshipGraph({ businessName, mobileMenuOpen }: Rela
       filteredNodes.forEach((d) => {
         if (d.x !== undefined && d.y !== undefined) {
           const r = layoutMode === 'mobile' ? (d.valueSize ?? 24) * 0.8 : (d.valueSize ?? 24);
-          // Keep a small padding (20-24px, target 22px)
-          const padding = 22;
+          // Safe node boundary padding
+          const padding = 24;
           minX = Math.min(minX, d.x - r - padding);
           maxX = Math.max(maxX, d.x + r + padding);
           minY = Math.min(minY, d.y - r - padding);
@@ -477,12 +496,20 @@ export default function RelationshipGraph({ businessName, mobileMenuOpen }: Rela
         if (graphW <= 0) graphW = 100;
         if (graphH <= 0) graphH = 100;
         
-        const scaleX = (width * 0.92) / graphW;
-        const scaleY = (height * 0.92) / graphH;
+        // Account for top and bottom absolute bars on mobile (approx 65px each)
+        const horizontalMargin = 32; // 16px on each side
+        const verticalMargin = isFullscreen ? 110 : 130; // space for top/bottom controls
+        
+        const availableW = Math.max(100, width - horizontalMargin);
+        const availableH = Math.max(100, height - verticalMargin);
+        
+        const targetPercent = 0.94;
+        const scaleX = (availableW * targetPercent) / graphW;
+        const scaleY = (availableH * targetPercent) / graphH;
         let scale = Math.min(scaleX, scaleY);
         
         // Restrict scale bounds to reasonable limits
-        scale = Math.max(0.15, Math.min(2.5, scale));
+        scale = Math.max(0.1, Math.min(3.5, scale));
         
         const centerX = (minX + maxX) / 2;
         const centerY = (minY + maxY) / 2;
@@ -548,13 +575,12 @@ export default function RelationshipGraph({ businessName, mobileMenuOpen }: Rela
             if (isSelected || isHovered || scale >= 0.8) return 1;
             return 0;
           });
-          
-          // Hide edge labels at low zoom on mobile/tablet to avoid clutter
-          svg.selectAll(".edge-label").style("opacity", scale >= 0.8 ? 1 : 0);
         } else {
           svg.selectAll(".node-label").style("opacity", 1);
-          svg.selectAll(".edge-label").style("opacity", 1);
         }
+        
+        // Hide edge labels by default, show only if visible
+        svg.selectAll(".edge-label").style("opacity", (d: any) => isLinkLabelVisible(d) ? 1 : 0);
       });
 
     zoomRef.current = zoomBehavior;
@@ -926,23 +952,19 @@ export default function RelationshipGraph({ businessName, mobileMenuOpen }: Rela
           if (isSelected || isHovered) return d.name;
           return truncateLabel(d.name, 12);
         });
-
-      // Hide edge labels below zoom 0.8
-      d3.select(svgRef.current)
-        .selectAll(".edge-label")
-        .style("opacity", currentScale >= 0.8 ? 1 : 0);
     } else {
       // Desktop behavior remains unchanged
       d3.select(svgRef.current)
         .selectAll(".node-label")
         .style("opacity", 1)
         .text((d: any) => d.name);
-
-      d3.select(svgRef.current)
-        .selectAll(".edge-label")
-        .style("opacity", 1);
     }
-  }, [selectedNode, hoveredNode, layoutMode, isFullscreen]);
+
+    // Always hide edge labels unless tapped/clicked, connected node is selected, or showRelationships is enabled
+    d3.select(svgRef.current)
+      .selectAll(".edge-label")
+      .style("opacity", (d: any) => isLinkLabelVisible(d) ? 1 : 0);
+  }, [selectedNode, hoveredNode, layoutMode, isFullscreen, showRelationships, selectedLink]);
 
   // Count items
   const partnersCount = graphData.nodes.filter(n => n.type === 'partner').length;
@@ -1288,6 +1310,18 @@ export default function RelationshipGraph({ businessName, mobileMenuOpen }: Rela
               </label>
             ))}
           </div>
+
+          <div className="pt-2 border-t border-slate-100 mt-2">
+            <label className="flex items-center space-x-2.5 cursor-pointer font-bold text-slate-700 hover:text-slate-900">
+              <input 
+                type="checkbox"
+                checked={showRelationships}
+                onChange={(e) => setShowRelationships(e.target.checked)}
+                className="rounded text-emerald-600 focus:ring-emerald-500 border-slate-300 w-3.5 h-3.5 cursor-pointer"
+              />
+              <span>Show Relationships</span>
+            </label>
+          </div>
         </div>
 
         {/* Inspector Detail panel */}
@@ -1413,6 +1447,18 @@ export default function RelationshipGraph({ businessName, mobileMenuOpen }: Rela
                   <span>{f.label}</span>
                 </label>
               ))}
+            </div>
+
+            <div className="pt-2 border-t border-slate-100 mt-2">
+              <label className="flex items-center space-x-3 cursor-pointer font-bold text-slate-700 hover:text-slate-900 text-xs py-1.5">
+                <input 
+                  type="checkbox"
+                  checked={showRelationships}
+                  onChange={(e) => setShowRelationships(e.target.checked)}
+                  className="rounded text-emerald-600 focus:ring-emerald-500 border-slate-300 w-4 h-4 cursor-pointer"
+                />
+                <span>Show Relationships</span>
+              </label>
             </div>
             
             <button 
