@@ -122,6 +122,11 @@ export default function BIOSDashboard() {
   const [authTab, setAuthTab] = useState<'login' | 'register' | 'forgot' | 'reset' | 'verify' | 'session_expired'>('login');
   const [authEmail, setAuthEmail] = useState('');
   const [authPassword, setAuthPassword] = useState('');
+  const [authFullName, setAuthFullName] = useState('');
+  const [authConfirmPassword, setAuthConfirmPassword] = useState('');
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [showRegisterPassword, setShowRegisterPassword] = useState(false);
+  const [isAuthLoading, setIsAuthLoading] = useState(false);
   const [authRole, setAuthRole] = useState('viewer');
   const [rememberMe, setRememberMe] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -622,12 +627,31 @@ export default function BIOSDashboard() {
   // User Authentication Handler
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isAuthLoading) return; // Prevent double submission
     if (!authEmail || !authPassword) {
       setAuthError("Email and Password are required.");
       return;
     }
     setAuthError("");
     setAuthSuccess("");
+    setIsAuthLoading(true);
+
+    const mapFriendlyError = (errorMsg: string): string => {
+      const msg = errorMsg.toLowerCase();
+      if (msg.includes("already registered") || msg.includes("already exists") || msg.includes("email registered")) {
+        return "Email already exists";
+      }
+      if (msg.includes("invalid email") || msg.includes("email format") || msg.includes("value is not a valid email")) {
+        return "Invalid email format";
+      }
+      if (msg.includes("password too short") || msg.includes("at least 8 characters") || msg.includes("weak password")) {
+        return "Password too weak";
+      }
+      if (msg.includes("unable to connect") || msg.includes("failed to fetch")) {
+        return "Unable to connect to server";
+      }
+      return errorMsg || "Something went wrong. Please try again.";
+    };
 
     try {
       const response = await fetch(getServiceUrl(8001, "/api/v1/auth/login"), {
@@ -653,47 +677,96 @@ export default function BIOSDashboard() {
           localStorage.setItem("bios_user", JSON.stringify(sessionUser));
           localStorage.setItem("bios_refresh_token", data.refresh_token);
           
-          setAuthSuccess("Successfully authenticated session.");
+          setAuthSuccess("✅ Welcome back!");
+          setToastMessage("✅ Welcome back!");
           
           // Automatically redirect according to role
           setTimeout(() => {
             setActiveView("map");
             setAuthSuccess("");
+            setIsAuthLoading(false);
           }, 800);
         } else {
           setAuthError("Failed to resolve user account credentials.");
+          setIsAuthLoading(false);
         }
       } else {
         const errData = await response.json();
-        setAuthError(errData.detail || "Incorrect email or password.");
+        setAuthError(mapFriendlyError(errData.detail || "Incorrect email or password."));
+        setIsAuthLoading(false);
       }
     } catch (err) {
-      setAuthError("Unable to connect to Auth Service. Verify backend is running.");
+      setAuthError("Unable to connect to server");
+      setIsAuthLoading(false);
     }
   };
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isAuthLoading) return; // Prevent double submission
+    
+    // Safety check
+    if (authPassword.length < 8) {
+      setAuthError("Password must be at least 8 characters.");
+      return;
+    }
+    if (authPassword !== authConfirmPassword) {
+      setAuthError("Passwords do not match.");
+      return;
+    }
+
     setAuthError("");
     setAuthSuccess("");
+    setIsAuthLoading(true);
+
+    const mapFriendlyError = (errorMsg: string): string => {
+      const msg = errorMsg.toLowerCase();
+      if (msg.includes("already registered") || msg.includes("already exists") || msg.includes("email registered")) {
+        return "Email already exists";
+      }
+      if (msg.includes("invalid email") || msg.includes("email format") || msg.includes("value is not a valid email")) {
+        return "Invalid email format";
+      }
+      if (msg.includes("password too short") || msg.includes("at least 8 characters") || msg.includes("weak password")) {
+        return "Password too weak";
+      }
+      if (msg.includes("unable to connect") || msg.includes("failed to fetch")) {
+        return "Unable to connect to server";
+      }
+      return errorMsg || "Something went wrong. Please try again.";
+    };
+
     try {
       const response = await fetch(getServiceUrl(8001, "/api/v1/auth/register"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: authEmail, password: authPassword, full_name: "SaaS Enterprise User", role: authRole }),
+        body: JSON.stringify({ 
+          email: authEmail, 
+          password: authPassword, 
+          full_name: authFullName, 
+          role: authRole 
+        }),
       });
       if (response.ok) {
-        setAuthSuccess("Account configuration registered. Verifying domain...");
+        setAuthSuccess("✅ Account created successfully. Please sign in.");
+        setToastMessage("✅ Account created successfully.");
+        // Clear fields
+        setAuthFullName("");
+        setAuthConfirmPassword("");
+        // Automatically switch to Sign In tab after 2 seconds
         setTimeout(() => {
-          setAuthTab('verify');
+          setAuthTab('login');
           setAuthSuccess("");
-        }, 1000);
+          setIsAuthLoading(false);
+        }, 2000);
       } else {
         const errData = await response.json();
-        setAuthError(errData.detail || "Failed to register account.");
+        setAuthError(mapFriendlyError(errData.detail || "Failed to register account."));
+        setIsAuthLoading(false);
       }
     } catch (err) {
-      setAuthError("Failed to reach auth registration service.");
+      setAuthError("Unable to connect to server");
+      setIsAuthLoading(false);
     }
   };
 
@@ -714,6 +787,7 @@ export default function BIOSDashboard() {
     setAuthPassword("");
     setSelectedBiz(null);
     setSearchQuery("");
+    setToastMessage("✅ Signed out successfully.");
   };
 
   const handleForgotPassword = (e: React.FormEvent) => {
@@ -1366,8 +1440,10 @@ export default function BIOSDashboard() {
                 <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">Email Address</label>
                 <input 
                   type="email" required
+                  autoFocus
+                  disabled={isAuthLoading}
                   placeholder="name@company.com" 
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-800 outline-none focus:border-indigo-500 focus:bg-white font-medium transition"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-800 outline-none focus:border-indigo-500 focus:bg-white font-medium transition animate-none"
                   value={authEmail}
                   onChange={(e) => setAuthEmail(e.target.value)}
                 />
@@ -1376,20 +1452,30 @@ export default function BIOSDashboard() {
               <div className="space-y-1">
                 <div className="flex justify-between items-center">
                   <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">Password</label>
-                  <button type="button" onClick={() => setAuthTab('forgot')} className="text-[9px] text-indigo-600 hover:underline font-bold">Forgot?</button>
+                  <button 
+                    type="button" 
+                    disabled={isAuthLoading}
+                    onClick={() => setAuthTab('forgot')} 
+                    className="text-[9px] text-indigo-600 hover:underline font-bold"
+                  >
+                    Forgot?
+                  </button>
                 </div>
                 <div className="relative">
                   <input 
-                     type={showPassword ? "text" : "password"} required
-                     placeholder="••••••••" 
-                     className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-3.5 pr-10 py-2.5 text-xs text-slate-800 outline-none focus:border-indigo-500 focus:bg-white font-medium transition"
-                     value={authPassword}
-                     onChange={(e) => setAuthPassword(e.target.value)}
+                    type={showPassword ? "text" : "password"} required
+                    disabled={isAuthLoading}
+                    placeholder="••••••••" 
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-3.5 pr-12 py-2.5 text-xs text-slate-800 outline-none focus:border-indigo-500 focus:bg-white font-medium transition animate-none"
+                    value={authPassword}
+                    onChange={(e) => setAuthPassword(e.target.value)}
                   />
                   <button 
                     type="button" 
+                    disabled={isAuthLoading}
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-3 text-slate-400 hover:text-slate-600"
+                    className="absolute right-0 top-0 w-11 h-11 flex items-center justify-center text-slate-400 hover:text-slate-600"
+                    style={{ minWidth: '44px', minHeight: '44px' }}
                   >
                     {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
@@ -1400,6 +1486,7 @@ export default function BIOSDashboard() {
                 <label className="flex items-center space-x-2 text-slate-500 cursor-pointer select-none">
                   <input 
                     type="checkbox" 
+                    disabled={isAuthLoading}
                     checked={rememberMe}
                     onChange={(e) => setRememberMe(e.target.checked)}
                     className="rounded border-slate-300 text-indigo-600 focus:ring-0 w-3.5 h-3.5 cursor-pointer"
@@ -1410,9 +1497,21 @@ export default function BIOSDashboard() {
 
               <button 
                 type="submit" 
-                className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs uppercase tracking-wider py-3.5 rounded-xl shadow-md transition"
+                disabled={isAuthLoading}
+                className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white font-bold text-xs uppercase tracking-wider py-3.5 rounded-xl shadow-md transition flex items-center justify-center"
+                style={{ minHeight: '44px' }}
               >
-                Sign In
+                {isAuthLoading ? (
+                  <>
+                    <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white inline-block" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <span>Signing In...</span>
+                  </>
+                ) : (
+                  <span>Sign In</span>
+                )}
               </button>
             </form>
           )}
@@ -1420,11 +1519,25 @@ export default function BIOSDashboard() {
           {authTab === 'register' && (
             <form onSubmit={handleRegister} className="space-y-4">
               <div className="space-y-1">
+                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">Full Name</label>
+                <input 
+                  type="text" required
+                  autoFocus
+                  disabled={isAuthLoading}
+                  placeholder="Jane Doe" 
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-800 outline-none focus:border-indigo-500 focus:bg-white font-medium transition animate-none"
+                  value={authFullName}
+                  onChange={(e) => setAuthFullName(e.target.value)}
+                />
+              </div>
+
+              <div className="space-y-1">
                 <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">Email Address</label>
                 <input 
                   type="email" required
+                  disabled={isAuthLoading}
                   placeholder="name@company.com" 
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-800 outline-none focus:border-indigo-500 focus:bg-white font-medium transition"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-800 outline-none focus:border-indigo-500 focus:bg-white font-medium transition animate-none"
                   value={authEmail}
                   onChange={(e) => setAuthEmail(e.target.value)}
                 />
@@ -1432,22 +1545,86 @@ export default function BIOSDashboard() {
 
               <div className="space-y-1">
                 <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">Password</label>
-                <input 
-                  type="password" required
-                  placeholder="••••••••" 
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-800 outline-none focus:border-indigo-500 focus:bg-white font-medium transition"
-                  value={authPassword}
-                  onChange={(e) => setAuthPassword(e.target.value)}
-                />
+                <div className="relative">
+                  <input 
+                    type={showRegisterPassword ? "text" : "password"} required
+                    disabled={isAuthLoading}
+                    placeholder="••••••••" 
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-3.5 pr-12 py-2.5 text-xs text-slate-800 outline-none focus:border-indigo-500 focus:bg-white font-medium transition animate-none"
+                    value={authPassword}
+                    onChange={(e) => setAuthPassword(e.target.value)}
+                  />
+                  <button 
+                    type="button" 
+                    disabled={isAuthLoading}
+                    onClick={() => setShowRegisterPassword(!showRegisterPassword)}
+                    className="absolute right-0 top-0 w-11 h-11 flex items-center justify-center text-slate-400 hover:text-slate-600"
+                    style={{ minWidth: '44px', minHeight: '44px' }}
+                  >
+                    {showRegisterPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+                {authPassword.length > 0 && authPassword.length < 8 && (
+                  <p className="text-[10px] text-red-500 font-semibold mt-1">Password must be at least 8 characters.</p>
+                )}
               </div>
 
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">Confirm Password</label>
+                <div className="relative">
+                  <input 
+                    type={showConfirmPassword ? "text" : "password"} required
+                    disabled={isAuthLoading}
+                    placeholder="••••••••" 
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-3.5 pr-12 py-2.5 text-xs text-slate-800 outline-none focus:border-indigo-500 focus:bg-white font-medium transition animate-none"
+                    value={authConfirmPassword}
+                    onChange={(e) => setAuthConfirmPassword(e.target.value)}
+                  />
+                  <button 
+                    type="button" 
+                    disabled={isAuthLoading}
+                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                    className="absolute right-0 top-0 w-11 h-11 flex items-center justify-center text-slate-400 hover:text-slate-600"
+                    style={{ minWidth: '44px', minHeight: '44px' }}
+                  >
+                    {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+                {authConfirmPassword.length > 0 && authConfirmPassword !== authPassword && (
+                  <p className="text-[10px] text-red-500 font-semibold mt-1">Passwords do not match.</p>
+                )}
+              </div>
 
+              {authSuccess && (
+                <div className="pt-2">
+                  <button
+                    type="button"
+                    onClick={() => { setAuthTab('login'); setAuthSuccess(''); }}
+                    className="w-full bg-slate-100 hover:bg-slate-200 text-indigo-600 font-bold text-xs uppercase tracking-wider py-2 rounded-xl transition"
+                    style={{ minHeight: '44px' }}
+                  >
+                    Go to Sign In
+                  </button>
+                </div>
+              )}
 
               <button 
                 type="submit" 
-                className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs uppercase tracking-wider py-3.5 rounded-xl shadow-md transition"
+                disabled={isAuthLoading || !(authFullName.trim() !== "" && authEmail.trim() !== "" && authPassword.length >= 8 && authConfirmPassword === authPassword)}
+                className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-200 disabled:text-slate-500 text-white font-bold text-xs uppercase tracking-wider py-3.5 rounded-xl shadow-md transition flex items-center justify-center"
+                style={{ minHeight: '44px' }}
               >
-                Register & Verify
+                {isAuthLoading ? (
+                  <>
+                    <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white inline-block" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <span>Creating Account...</span>
+                  </>
+                ) : (
+                  <span>Create Account</span>
+                )}
               </button>
             </form>
           )}

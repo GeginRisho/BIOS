@@ -44,6 +44,12 @@ function getSeededPosition(id: string, index: number, total: number, width: numb
   };
 }
 
+function truncateLabel(name: string, maxLength: number = 12): string {
+  if (!name) return "";
+  if (name.length <= maxLength) return name;
+  return name.slice(0, maxLength - 3) + '...';
+}
+
 export default function RelationshipGraph({ businessName, mobileMenuOpen }: RelationshipGraphProps) {
   const svgRef = useRef<SVGSVGElement>(null);
   const zoomRef = useRef<any>(null);
@@ -67,72 +73,94 @@ export default function RelationshipGraph({ businessName, mobileMenuOpen }: Rela
   const [isFullscreen, setIsFullscreen] = useState(false);
   const containerWrapperRef = useRef<HTMLDivElement>(null);
 
-  const [width, setWidth] = useState(800);
-  const [height, setHeight] = useState(650);
+  const preFullscreenTransformRef = useRef<any>(null);
 
-  const updateDimensions = () => {
-    if (typeof window === 'undefined') return;
-    
-    let w = 800;
-    let h = 650;
-    
-    if (isFullscreen) {
-      w = window.innerWidth;
-      h = window.innerHeight;
-    } else {
-      if (containerWrapperRef.current) {
-        w = containerWrapperRef.current.clientWidth || 800;
-      } else {
-        w = window.innerWidth;
-      }
-      
-      const screenW = window.innerWidth;
-      if (screenW <= 360) {
-        h = 420;
-      } else if (screenW < 768) {
-        h = 500;
-      } else if (screenW < 1280) {
-        h = 600;
-      } else {
-        h = 650;
-      }
-    }
-    
-    setWidth(w);
-    setHeight(h);
+  const handleEnterFullscreen = () => {
+    preFullscreenTransformRef.current = transformRef.current;
+    setIsFullscreen(true);
   };
 
+  const handleExitFullscreen = () => {
+    setIsFullscreen(false);
+    setTimeout(() => {
+      if (svgRef.current && zoomRef.current && preFullscreenTransformRef.current) {
+        d3.select(svgRef.current)
+          .transition()
+          .duration(500)
+          .call(zoomRef.current.transform, preFullscreenTransformRef.current);
+      }
+    }, 50);
+  };
+
+  const [width, setWidth] = useState(800);
+  const [height, setHeight] = useState(650);
+  const [containerHeight, setContainerHeight] = useState(650);
+
+  // Disable body scroll on fullscreen
   useEffect(() => {
-    let frameId: number;
-    let timeoutId: any;
-    
-    const handleResize = () => {
-      clearTimeout(timeoutId);
-      timeoutId = setTimeout(() => {
-        frameId = requestAnimationFrame(() => {
-          updateDimensions();
-          
-          const w = window.innerWidth;
-          if (w < 768) {
-            setLayoutMode('mobile');
-          } else if (w < 1280) {
-            setLayoutMode('tablet');
-          } else {
-            setLayoutMode('desktop');
-          }
-        });
-      }, 100);
-    };
-    
-    window.addEventListener("resize", handleResize);
-    window.addEventListener("orientationchange", handleResize);
-    updateDimensions();
-    
+    if (isFullscreen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
     return () => {
-      window.removeEventListener("resize", handleResize);
-      window.removeEventListener("orientationchange", handleResize);
-      clearTimeout(timeoutId);
-      cancelAnimationFrame(frameId);
+      document.body.style.overflow = '';
+    };
+  }, [isFullscreen]);
+
+  useEffect(() => {
+    if (!containerWrapperRef.current) return;
+
+    const updateFromRect = (rectWidth: number) => {
+      const screenW = window.innerWidth;
+      const screenH = window.innerHeight;
+      
+      let w = rectWidth || 800;
+      let h = 650;
+      
+      if (isFullscreen) {
+        w = screenW;
+        h = screenH;
+      } else {
+        if (screenW <= 320) {
+          h = 420;
+        } else if (screenW <= 360) {
+          h = 460;
+        } else if (screenW <= 390) {
+          h = 500;
+        } else if (screenW <= 430) {
+          h = 540;
+        } else if (screenW < 1024) {
+          h = 620;
+        } else {
+          h = 650;
+        }
+      }
+      
+      setWidth(w);
+      setHeight(h);
+      setContainerHeight(h);
+      
+      if (screenW < 768) {
+        setLayoutMode('mobile');
+      } else if (screenW < 1280) {
+        setLayoutMode('tablet');
+      } else {
+        setLayoutMode('desktop');
+      }
+    };
+
+    const observer = new ResizeObserver((entries) => {
+      if (!entries || entries.length === 0) return;
+      const rect = entries[0].contentRect;
+      updateFromRect(rect.width);
+    });
+
+    observer.observe(containerWrapperRef.current);
+    updateFromRect(containerWrapperRef.current.clientWidth);
+
+    return () => {
+      observer.disconnect();
     };
   }, [isFullscreen]);
 
@@ -405,43 +433,45 @@ export default function RelationshipGraph({ businessName, mobileMenuOpen }: Rela
     if (!svgRef.current || !zoomRef.current || filteredNodes.length === 0) return;
     const svg = d3.select(svgRef.current);
     
-    if (layoutMode === 'mobile' || layoutMode === 'tablet' || isFullscreen) {
-      // Fit all nodes into viewport to occupy 90-95% (92%) of available width and height
+    const isMobileOrTablet = layoutMode === 'mobile' || layoutMode === 'tablet' || window.innerWidth < 1280;
+    
+    if (isMobileOrTablet) {
       let minX = Infinity, maxX = -Infinity;
       let minY = Infinity, maxY = -Infinity;
       
       filteredNodes.forEach((d) => {
-        const r = layoutMode === 'mobile' ? (d.valueSize ?? 24) * 0.8 : (d.valueSize ?? 24);
         if (d.x !== undefined && d.y !== undefined) {
-          minX = Math.min(minX, d.x - r);
-          maxX = Math.max(maxX, d.x + r);
-          minY = Math.min(minY, d.y - r);
-          maxY = Math.max(maxY, d.y + r);
+          const r = layoutMode === 'mobile' ? (d.valueSize ?? 24) * 0.8 : (d.valueSize ?? 24);
+          // Apply margins to bounds check to account for labels & selection rings
+          minX = Math.min(minX, d.x - r - 25);
+          maxX = Math.max(maxX, d.x + r + 25);
+          minY = Math.min(minY, d.y - r - 10);
+          maxY = Math.max(maxY, d.y + r + 30);
         }
       });
       
-      const graphW = maxX - minX;
-      const graphH = maxY - minY;
-      
-      if (graphW > 0 && graphH > 0) {
-        const padding = 20; // 20px padding
-        const scaleX = (width - padding * 2) / graphW;
-        const scaleY = (height - padding * 2) / graphH;
+      if (minX !== Infinity) {
+        let graphW = maxX - minX;
+        let graphH = maxY - minY;
+        
+        if (graphW <= 0) graphW = 100;
+        if (graphH <= 0) graphH = 100;
+        
+        const scaleX = (width * 0.92) / graphW;
+        const scaleY = (height * 0.92) / graphH;
         let scale = Math.min(scaleX, scaleY);
         
-        if (scale >= 1.0) {
-          scale = 1.0; // Do not shrink unless it exceeds the canvas
-        } else {
-          scale = scale * 0.92; // Scale to occupy 90-95% (92%) of viewport
-        }
+        // Restrict scale bounds to reasonable limits
+        scale = Math.max(0.15, Math.min(2.5, scale));
         
         const centerX = (minX + maxX) / 2;
         const centerY = (minY + maxY) / 2;
         
-        const transform = d3.zoomIdentity
-          .translate(width / 2 - centerX * scale, height / 2 - centerY * scale)
-          .scale(scale);
-          
+        const tx = width / 2 - centerX * scale;
+        const ty = height / 2 - centerY * scale;
+        
+        const transform = d3.zoomIdentity.translate(tx, ty).scale(scale);
+        
         svg.transition().duration(500).call(zoomRef.current.transform, transform);
       }
     } else {
@@ -543,15 +573,21 @@ export default function RelationshipGraph({ businessName, mobileMenuOpen }: Rela
       .attr("flood-opacity", "0.06")
       .attr("flood-color", "#0f172a");
 
+    const isMobile = layoutMode === 'mobile';
+    const isTablet = layoutMode === 'tablet';
+    const linkDistance = isMobile ? 90 : (isTablet ? 120 : 180);
+    const chargeStrength = isMobile ? -200 : (isTablet ? -400 : -800);
+    const collideRadius = (d: any) => {
+      const baseSize = isMobile ? (d.valueSize ?? 24) * 0.8 : (d.valueSize ?? 24);
+      return baseSize + (isMobile ? 20 : (isTablet ? 30 : 54));
+    };
+
     // Force simulation configurations (strong collision & constraints for clean positions)
     const simulation = d3.forceSimulation<Node>(filteredNodes)
-      .force("link", d3.forceLink<Node, Link>(filteredLinks).id((d) => d.id).distance(layoutMode === 'mobile' ? 150 : 180))
-      .force("charge", d3.forceManyBody().strength(layoutMode === 'mobile' ? -400 : -800))
+      .force("link", d3.forceLink<Node, Link>(filteredLinks).id((d) => d.id).distance(linkDistance))
+      .force("charge", d3.forceManyBody().strength(chargeStrength))
       .force("center", d3.forceCenter(width / 2, height / 2))
-      .force("collision", d3.forceCollide().radius((d: any) => {
-        const baseSize = layoutMode === 'mobile' ? (d.valueSize ?? 24) * 0.8 : (d.valueSize ?? 24);
-        return baseSize + (layoutMode === 'mobile' ? 36 : 54);
-      }))
+      .force("collision", d3.forceCollide().radius(collideRadius))
       .alphaDecay(0.06);
 
     simulationRef.current = simulation;
@@ -675,7 +711,12 @@ export default function RelationshipGraph({ businessName, mobileMenuOpen }: Rela
       .attr("font-weight", "700")
       .attr("fill", "#1f2937")
       .attr("class", "node-label select-none pointer-events-none")
-      .text((d) => d.name);
+      .text((d) => {
+        const isSelected = selectedNode?.id === d.id;
+        const isHovered = hoveredNode?.id === d.id;
+        if (isSelected || isHovered) return d.name;
+        return truncateLabel(d.name, 12);
+      });
 
     // Simulation tick loop
     simulation.on("tick", () => {
@@ -685,6 +726,58 @@ export default function RelationshipGraph({ businessName, mobileMenuOpen }: Rela
         d.x = Math.max(r, Math.min(width - r, d.x || 0));
         d.y = Math.max(r, Math.min(height - r, d.y || 0));
       });
+
+      // 2. Collision detection for labels
+      const isMobileOrTablet = layoutMode === 'mobile' || layoutMode === 'tablet' || window.innerWidth < 1280;
+      if (isMobileOrTablet) {
+        const labelBoxes: { x: number; y: number; w: number; h: number }[] = [];
+        const sortedNodes = [...filteredNodes].sort((a, b) => (a.y || 0) - (b.y || 0));
+        const resolvedOffsets: Record<string, number> = {};
+        
+        sortedNodes.forEach((d) => {
+          const r = isMobile ? (d.valueSize ?? 24) * 0.8 : (d.valueSize ?? 24);
+          const isSelected = selectedNode?.id === d.id;
+          const isHovered = hoveredNode?.id === d.id;
+          const currentScale = transformRef.current?.k ?? 1;
+          const isVisible = isSelected || isHovered || currentScale > 0.8;
+          
+          let offset = r + (isMobile ? 12 : 16);
+          if (!isVisible) {
+            resolvedOffsets[d.id] = offset;
+            return;
+          }
+          
+          const nameText = isSelected || isHovered ? d.name : truncateLabel(d.name, 12);
+          const w = nameText.length * (isMobile ? 5.5 : 7);
+          const h = isMobile ? 10 : 12;
+          
+          let labelX = d.x || 0;
+          let labelY = (d.y || 0) + offset;
+          
+          let hasOverlap = true;
+          let attempts = 0;
+          while (hasOverlap && attempts < 10) {
+            hasOverlap = false;
+            attempts++;
+            for (const box of labelBoxes) {
+              const dx = Math.abs(labelX - box.x);
+              const dy = Math.abs(labelY - box.y);
+              if (dx < (w + box.w) / 2 && dy < (h + box.h) / 2) {
+                hasOverlap = true;
+                labelY = box.y + (h + box.h) / 2 + 2;
+                break;
+              }
+            }
+          }
+          
+          labelBoxes.push({ x: labelX, y: labelY, w, h });
+          resolvedOffsets[d.id] = labelY - (d.y || 0);
+        });
+        
+        node.select(".node-label").attr("dy", (d: any) => resolvedOffsets[d.id] || (isMobile ? (d.valueSize ?? 24) * 0.8 + 12 : (d.valueSize ?? 24) + 16));
+      } else {
+        node.select(".node-label").attr("dy", (d: any) => (d.valueSize ?? 24) + 16);
+      }
 
       link
         .attr("x1", (d) => {
@@ -783,19 +876,39 @@ export default function RelationshipGraph({ businessName, mobileMenuOpen }: Rela
 
     // Dynamic zoom label visibility helper
     const currentScale = transformRef.current?.k ?? 1;
-    d3.select(svgRef.current)
-      .selectAll(".node-label")
-      .style("opacity", (d: any) => {
-        const isSelected = selectedNode?.id === d.id;
-        const isHovered = hoveredNode?.id === d.id;
-        if (isSelected || isHovered || currentScale >= 0.75) return 1;
-        return 0;
-      });
+    const isMobileOrTablet = layoutMode === 'mobile' || layoutMode === 'tablet' || window.innerWidth < 1280;
 
-    // Hide edge labels at low zoom on mobile/tablet to avoid clutter
-    d3.select(svgRef.current)
-      .selectAll(".edge-label")
-      .style("opacity", (layoutMode === 'mobile' || layoutMode === 'tablet') ? (currentScale >= 0.85 ? 1 : 0) : 1);
+    if (isMobileOrTablet) {
+      d3.select(svgRef.current)
+        .selectAll(".node-label")
+        .style("opacity", (d: any) => {
+          const isSelected = selectedNode?.id === d.id;
+          const isHovered = hoveredNode?.id === d.id;
+          if (isSelected || isHovered || currentScale > 0.8) return 1;
+          return 0;
+        })
+        .text((d: any) => {
+          const isSelected = selectedNode?.id === d.id;
+          const isHovered = hoveredNode?.id === d.id;
+          if (isSelected || isHovered) return d.name;
+          return truncateLabel(d.name, 12);
+        });
+
+      // Hide edge labels below zoom 0.8
+      d3.select(svgRef.current)
+        .selectAll(".edge-label")
+        .style("opacity", currentScale >= 0.8 ? 1 : 0);
+    } else {
+      // Desktop behavior remains unchanged
+      d3.select(svgRef.current)
+        .selectAll(".node-label")
+        .style("opacity", 1)
+        .text((d: any) => d.name);
+
+      d3.select(svgRef.current)
+        .selectAll(".edge-label")
+        .style("opacity", 1);
+    }
   }, [selectedNode, hoveredNode, layoutMode]);
 
   // Count items
@@ -852,9 +965,20 @@ export default function RelationshipGraph({ businessName, mobileMenuOpen }: Rela
           className={
             isFullscreen 
               ? "fixed inset-0 z-[150] bg-slate-50 w-screen h-screen flex flex-col animate-in fade-in duration-200 overflow-hidden" 
-              : "rounded-3xl border border-slate-200/80 bg-slate-50 relative h-[420px] sm:h-[500px] md:h-[600px] xl:h-[650px] shadow-inner overflow-hidden w-full max-w-full"
+              : "rounded-3xl border border-slate-200/80 bg-slate-50 relative shadow-inner overflow-hidden w-full max-w-full"
           }
-          style={{ touchAction: 'none' }}
+          style={{ 
+            touchAction: 'none',
+            height: isFullscreen ? '100vh' : `${containerHeight}px`,
+            width: '100%',
+            maxWidth: '100%',
+            overflow: 'hidden',
+            position: isFullscreen ? 'fixed' : 'relative',
+            paddingTop: isFullscreen ? 'env(safe-area-inset-top, 0px)' : '0px',
+            paddingBottom: isFullscreen ? 'env(safe-area-inset-bottom, 0px)' : '0px',
+            paddingLeft: isFullscreen ? 'env(safe-area-inset-left, 0px)' : '0px',
+            paddingRight: isFullscreen ? 'env(safe-area-inset-right, 0px)' : '0px',
+          }}
         >
           
           {isLoading && (
@@ -878,7 +1002,7 @@ export default function RelationshipGraph({ businessName, mobileMenuOpen }: Rela
             className="w-full h-full block touch-none" 
             onClick={(e) => {
               if (e.target === svgRef.current && (layoutMode === 'mobile' || layoutMode === 'tablet') && !isFullscreen) {
-                setIsFullscreen(true);
+                handleEnterFullscreen();
               }
             }}
           />
@@ -941,43 +1065,60 @@ export default function RelationshipGraph({ businessName, mobileMenuOpen }: Rela
           </div>
 
           {/* Mobile Top Action Bar */}
-          <div className="xl:hidden absolute top-4 left-4 right-4 z-10 flex justify-between items-center pointer-events-none">
-            <div className="bg-white/90 backdrop-blur-md border border-slate-200/80 p-1.5 rounded-xl shadow-md flex space-x-1 pointer-events-auto">
+          <div 
+            className="xl:hidden absolute z-10 pointer-events-none"
+            style={{
+              top: 'calc(16px + env(safe-area-inset-top, 0px))',
+              left: 'calc(16px + env(safe-area-inset-left, 0px))',
+              right: 'calc(16px + env(safe-area-inset-right, 0px))',
+              display: 'flex',
+              flexWrap: 'wrap',
+              gap: '12px'
+            }}
+          >
+            {/* Top row: Zoom+, Zoom-, Fullscreen */}
+            <div className="bg-white/90 backdrop-blur-md border border-slate-200/80 p-1 rounded-xl shadow-md flex gap-1 pointer-events-auto shrink-0">
               <button 
                 onClick={() => handleZoom(1.2)} 
-                className="w-11 h-11 hover:bg-slate-100 rounded-lg text-slate-600 hover:text-slate-900 transition flex items-center justify-center shrink-0" 
+                className="w-11 h-11 hover:bg-slate-100 rounded-lg text-slate-600 hover:text-slate-900 transition flex items-center justify-center shrink-0 cursor-pointer" 
+                style={{ minWidth: '44px', minHeight: '44px' }}
                 title="Zoom In"
               >
                 <ZoomIn className="w-5 h-5" />
               </button>
               <button 
                 onClick={() => handleZoom(0.8)} 
-                className="w-11 h-11 hover:bg-slate-100 rounded-lg text-slate-600 hover:text-slate-900 transition flex items-center justify-center shrink-0" 
+                className="w-11 h-11 hover:bg-slate-100 rounded-lg text-slate-600 hover:text-slate-900 transition flex items-center justify-center shrink-0 cursor-pointer" 
+                style={{ minWidth: '44px', minHeight: '44px' }}
                 title="Zoom Out"
               >
                 <ZoomOut className="w-5 h-5" />
               </button>
               <button 
-                onClick={() => setIsFullscreen(!isFullscreen)} 
-                className="w-11 h-11 hover:bg-slate-100 rounded-lg text-slate-600 hover:text-slate-900 transition flex items-center justify-center shrink-0" 
+                onClick={() => isFullscreen ? handleExitFullscreen() : handleEnterFullscreen()} 
+                className="w-11 h-11 hover:bg-slate-100 rounded-lg text-slate-600 hover:text-slate-900 transition flex items-center justify-center shrink-0 cursor-pointer" 
+                style={{ minWidth: '44px', minHeight: '44px' }}
                 title={isFullscreen ? "Exit Fullscreen" : "Fullscreen"}
               >
                 <Maximize className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="pointer-events-auto flex space-x-2">
+            {/* Second row: Filters, Close */}
+            <div className="flex gap-2 pointer-events-auto shrink-0">
               <button
                 onClick={() => setShowMobileFilters(true)}
-                className="bg-white/90 backdrop-blur-md border border-slate-200/80 px-3 rounded-xl shadow-md text-slate-700 font-bold text-[10px] flex items-center space-x-1.5 h-11 shrink-0 cursor-pointer"
+                className="bg-white/90 backdrop-blur-md border border-slate-200/80 px-3 rounded-xl shadow-md text-slate-700 font-bold text-[10px] flex items-center justify-center space-x-1.5 h-11 cursor-pointer"
+                style={{ minWidth: '80px', minHeight: '44px' }}
               >
                 <Filter className="w-4 h-4 text-emerald-500" />
                 <span>Filters</span>
               </button>
               {isFullscreen && (
                 <button
-                  onClick={() => setIsFullscreen(false)}
-                  className="bg-red-50 hover:bg-red-100 border border-red-200 px-3 rounded-xl shadow-md text-red-600 font-extrabold text-[10px] flex items-center space-x-1.5 h-11 shrink-0 cursor-pointer"
+                  onClick={handleExitFullscreen}
+                  className="bg-red-50 hover:bg-red-100 border border-red-200 px-3 rounded-xl shadow-md text-red-600 font-extrabold text-[10px] flex items-center justify-center space-x-1.5 h-11 cursor-pointer animate-in fade-in duration-200"
+                  style={{ minWidth: '80px', minHeight: '44px' }}
                 >
                   <span>Close</span>
                 </button>
@@ -986,22 +1127,32 @@ export default function RelationshipGraph({ businessName, mobileMenuOpen }: Rela
           </div>
 
           {/* Mobile Bottom Action Bar */}
-          <div className="xl:hidden absolute bottom-4 left-4 right-4 z-10 flex justify-between items-center pointer-events-none">
-            <div className="flex items-end select-none pointer-events-auto relative">
+          <div 
+            className="xl:hidden absolute z-10 pointer-events-none flex flex-wrap justify-between items-center"
+            style={{
+              bottom: 'calc(16px + env(safe-area-inset-bottom, 0px))',
+              left: 'calc(16px + env(safe-area-inset-left, 0px))',
+              right: 'calc(16px + env(safe-area-inset-right, 0px))',
+              gap: '12px'
+            }}
+          >
+            <div className="flex items-end select-none pointer-events-auto relative shrink-0">
               <button 
                 onClick={() => setShowLegend(true)}
                 className="bg-white hover:bg-slate-50 border border-slate-200/80 rounded-xl shadow-md text-slate-600 hover:text-slate-900 transition flex items-center justify-center space-x-1 text-[10px] font-bold h-11 px-3 cursor-pointer"
+                style={{ minWidth: '80px', minHeight: '44px' }}
               >
                 <span>🗺️</span>
                 <span>Legend</span>
               </button>
             </div>
 
-            <div className="flex space-x-2 pointer-events-auto">
+            <div className="flex space-x-2 pointer-events-auto shrink-0">
               {(selectedNode || selectedLink) && (
                 <button
                   onClick={() => setShowMobileInspector(true)}
-                  className="bg-white/90 backdrop-blur-md border border-slate-200/80 px-3 rounded-xl shadow-md text-slate-700 font-bold text-[10px] flex items-center space-x-1.5 h-11 cursor-pointer"
+                  className="bg-white/90 backdrop-blur-md border border-slate-200/80 px-3 rounded-xl shadow-md text-slate-700 font-bold text-[10px] flex items-center justify-center space-x-1.5 h-11 cursor-pointer"
+                  style={{ minWidth: '80px', minHeight: '44px' }}
                 >
                   <Info className="w-4 h-4 text-emerald-500" />
                   <span>Details</span>
@@ -1010,6 +1161,7 @@ export default function RelationshipGraph({ businessName, mobileMenuOpen }: Rela
               <button
                 onClick={handleReset}
                 className="bg-emerald-600 hover:bg-emerald-700 text-white w-11 h-11 rounded-full shadow-lg transition active:scale-95 flex items-center justify-center cursor-pointer"
+                style={{ minWidth: '44px', minHeight: '44px' }}
                 title="Reset Layout"
               >
                 <RotateCcw className="w-5 h-5" />
@@ -1181,7 +1333,12 @@ export default function RelationshipGraph({ businessName, mobileMenuOpen }: Rela
           onClick={() => setShowMobileFilters(false)}
         >
           <div 
-            className="bg-white w-full rounded-t-3xl p-5 space-y-4 shadow-2xl max-h-[80vh] overflow-y-auto animate-in slide-in-from-bottom duration-250 pb-8"
+            className="bg-white w-full rounded-t-3xl p-5 space-y-4 shadow-2xl max-h-[80vh] overflow-y-auto animate-in slide-in-from-bottom duration-250"
+            style={{
+              paddingBottom: 'calc(2rem + env(safe-area-inset-bottom, 0px))',
+              paddingLeft: 'calc(1.25rem + env(safe-area-inset-left, 0px))',
+              paddingRight: 'calc(1.25rem + env(safe-area-inset-right, 0px))',
+            }}
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex justify-between items-center pb-2.5 border-b border-slate-100">
@@ -1189,7 +1346,7 @@ export default function RelationshipGraph({ businessName, mobileMenuOpen }: Rela
                 <Filter className="w-4 h-4 text-emerald-500" />
                 <span>Interactive Filters</span>
               </span>
-              <button className="text-slate-400 hover:text-slate-600 font-extrabold p-1.5 text-xs" onClick={() => setShowMobileFilters(false)}>✕</button>
+              <button className="text-slate-400 hover:text-slate-600 font-extrabold p-1.5 text-xs cursor-pointer" onClick={() => setShowMobileFilters(false)}>✕</button>
             </div>
 
             {/* Search bar */}
@@ -1227,7 +1384,7 @@ export default function RelationshipGraph({ businessName, mobileMenuOpen }: Rela
             
             <button 
               onClick={() => { handleReset(); setShowMobileFilters(false); }}
-              className="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs uppercase tracking-wider py-2.5 rounded-xl transition"
+              className="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs uppercase tracking-wider py-2.5 rounded-xl transition cursor-pointer"
             >
               Reset Filters
             </button>
@@ -1242,7 +1399,12 @@ export default function RelationshipGraph({ businessName, mobileMenuOpen }: Rela
           onClick={() => setShowMobileInspector(false)}
         >
           <div 
-            className="bg-white w-full rounded-t-3xl p-5 space-y-4 shadow-2xl max-h-[80vh] overflow-y-auto animate-in slide-in-from-bottom duration-250 pb-8"
+            className="bg-white w-full rounded-t-3xl p-5 space-y-4 shadow-2xl max-h-[80vh] overflow-y-auto animate-in slide-in-from-bottom duration-250"
+            style={{
+              paddingBottom: 'calc(2rem + env(safe-area-inset-bottom, 0px))',
+              paddingLeft: 'calc(1.25rem + env(safe-area-inset-left, 0px))',
+              paddingRight: 'calc(1.25rem + env(safe-area-inset-right, 0px))',
+            }}
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex justify-between items-center pb-2.5 border-b border-slate-100">
@@ -1250,7 +1412,7 @@ export default function RelationshipGraph({ businessName, mobileMenuOpen }: Rela
                 <Info className="w-4 h-4 text-emerald-500" />
                 <span>Entity Inspector</span>
               </span>
-              <button className="text-slate-400 hover:text-slate-600 font-extrabold p-1.5 text-xs" onClick={() => setShowMobileInspector(false)}>✕</button>
+              <button className="text-slate-400 hover:text-slate-600 font-extrabold p-1.5 text-xs cursor-pointer" onClick={() => setShowMobileInspector(false)}>✕</button>
             </div>
 
             {selectedNode ? (
@@ -1301,7 +1463,7 @@ export default function RelationshipGraph({ businessName, mobileMenuOpen }: Rela
             
             <button 
               onClick={() => setShowMobileInspector(false)}
-              className="w-full bg-slate-900 text-white font-bold text-xs uppercase tracking-wider py-2.5 rounded-xl transition mt-4"
+              className="w-full bg-slate-900 text-white font-bold text-xs uppercase tracking-wider py-2.5 rounded-xl transition mt-4 cursor-pointer"
             >
               Dismiss Inspector
             </button>
@@ -1310,16 +1472,21 @@ export default function RelationshipGraph({ businessName, mobileMenuOpen }: Rela
       )}
 
       {/* Mobile Legend Bottom Sheet Overlay */}
-      {isMobile && showLegend && (
+      {(layoutMode === 'mobile' || layoutMode === 'tablet') && showLegend && (
         <>
           {/* Backdrop overlay */}
           <div 
-            className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-[155] xl:hidden animate-in fade-in duration-200"
+            className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-[1000] xl:hidden animate-in fade-in duration-200"
             onClick={() => setShowLegend(false)}
           />
           {/* Bottom Sheet */}
           <div 
-            className="fixed bottom-0 left-0 right-0 bg-white rounded-t-3xl border-t border-slate-200 p-5 z-[160] xl:hidden animate-in slide-in-from-bottom duration-300 shadow-2xl max-h-[50vh] overflow-y-auto"
+            className="fixed bottom-0 left-0 right-0 bg-white rounded-t-3xl border-t border-slate-200 p-5 z-[1001] xl:hidden animate-in slide-in-from-bottom duration-300 shadow-2xl max-h-[50vh] overflow-y-auto"
+            style={{
+              paddingBottom: 'calc(2rem + env(safe-area-inset-bottom, 0px))',
+              paddingLeft: 'calc(1.25rem + env(safe-area-inset-left, 0px))',
+              paddingRight: 'calc(1.25rem + env(safe-area-inset-right, 0px))',
+            }}
             onClick={(e) => e.stopPropagation()}
           >
             {/* Drag Handle indicator */}
@@ -1329,7 +1496,7 @@ export default function RelationshipGraph({ businessName, mobileMenuOpen }: Rela
               <span className="font-extrabold text-slate-800 text-xs uppercase tracking-wider font-mono">Relationship Legend</span>
               <button 
                 onClick={() => setShowLegend(false)}
-                className="text-slate-400 hover:text-slate-600 font-bold text-xs uppercase"
+                className="text-slate-400 hover:text-slate-600 font-bold text-xs uppercase cursor-pointer"
               >
                 Close
               </button>
