@@ -113,9 +113,12 @@ async def seed_data():
 @app.on_event("startup")
 async def startup_event():
     logger.info("Starting up Business Directory Service. Creating database schemas...")
-    async with engine.begin() as conn:
-        # Create tables only if they do not exist
-        await conn.run_sync(Base.metadata.create_all)
+    try:
+        async with engine.begin() as conn:
+            # Create tables only if they do not exist
+            await conn.run_sync(Base.metadata.create_all)
+    except Exception as e:
+        logger.warning(f"Database table creation skipped or handled by another process: {e}")
     logger.info("Database initialized successfully.")
     await seed_data()
 

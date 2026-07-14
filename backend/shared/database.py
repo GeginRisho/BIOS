@@ -12,9 +12,22 @@ from sqlalchemy.orm import declarative_base
 def make_engine(database_url: str, echo: bool = False):
     """Create an async SQLAlchemy engine with sane defaults."""
     connect_args = {}
+    pool_args = {}
     if "sqlite" in database_url:
         connect_args["check_same_thread"] = False
-    return create_async_engine(database_url, echo=echo, connect_args=connect_args)
+    else:
+        # Production Postgres tuning to avoid stale pools & idle disconnects
+        pool_args["pool_size"] = 5
+        pool_args["max_overflow"] = 10
+        pool_args["pool_recycle"] = 280
+        pool_args["pool_pre_ping"] = True
+        
+    return create_async_engine(
+        database_url, 
+        echo=echo, 
+        connect_args=connect_args,
+        **pool_args
+    )
 
 
 def make_session_factory(engine):

@@ -100,9 +100,12 @@ async def seed_users():
 @app.on_event("startup")
 async def startup_event():
     logger.info("Starting up Auth Service. Connecting to PostgreSQL and creating schemas...")
-    async with engine.begin() as conn:
-        # Create tables if not exists (avoid drop_all)
-        await conn.run_sync(Base.metadata.create_all)
+    try:
+        async with engine.begin() as conn:
+            # Create tables if not exists (avoid drop_all)
+            await conn.run_sync(Base.metadata.create_all)
+    except Exception as e:
+        logger.warning(f"Database table creation skipped or handled by another process: {e}")
     logger.info("Database tables verified.")
     await seed_users()
 

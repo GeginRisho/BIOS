@@ -67,7 +67,41 @@ def log_stream(name, stream):
     finally:
         stream.close()
 
+_svc_env = {}
+_svc_cwd = ""
+_svc_py = "python"
+
+def _launch_single_service(svc, env, cwd_dir, python_exe):
+    name = svc["name"]
+    port = svc["port"]
+    logger.info(f"Launching microservice {name} on port {port}...")
+
+    cmd = [
+        python_exe,
+        "-m",
+        "uvicorn",
+        f"backend.services.{name}.main:app",
+        "--port",
+        str(port),
+        "--host",
+        "127.0.0.1",
+    ]
+
+    proc = subprocess.Popen(
+        cmd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        env=env,
+        cwd=cwd_dir,
+        text=True,
+        bufsize=1,
+    )
+    t = threading.Thread(target=log_stream, args=(name, proc.stdout), daemon=True)
+    t.start()
+    return proc
+
 def start_services():
+    global _svc_env, _svc_cwd, _svc_py
     backend_dir = os.path.dirname(os.path.abspath(__file__))
     parent_dir = os.path.dirname(backend_dir)
     python_exe = sys.executable or "python"
@@ -83,36 +117,41 @@ def start_services():
 
     logger.info(f"CWD for microservices: {cwd_dir}")
     logger.info(f"PYTHONPATH: {env['PYTHONPATH']}")
-    logger.info(f"Using DATABASE_URL: {os.environ.get('DATABASE_URL') is not None}")
+    
+    # Store settings for watchdog restarts
+    _svc_env = env
+    _svc_cwd = cwd_dir
+    _svc_py = python_exe
+
+    # 1. Initialize database schema BEFORE spawning microservices to avoid race conditions!
+    database_url = os.environ.get("DATABASE_URL")
+    if not database_url:
+        try:
+            from backend.services.auth_service.config import settings as auth_settings
+            database_url = auth_settings.database_url
+        except Exception:
+            pass
+            
+    if database_url:
+        logger.info("Initializing database schemas from gateway...")
+        try:
+            from backend.shared.database import make_engine
+            from backend.shared.models import Base
+            engine_init = make_engine(database_url)
+            
+            async def _init_db():
+                async with engine_init.begin() as conn:
+                    await conn.run_sync(Base.metadata.create_all)
+                await engine_init.dispose()
+                
+            asyncio.run(_init_db())
+            logger.info("Database schemas successfully initialized from gateway.")
+        except Exception as db_exc:
+            logger.error(f"Error initializing database schemas from gateway: {db_exc}")
 
     for svc in SERVICES:
-        name = svc["name"]
-        port = svc["port"]
-        logger.info(f"Launching microservice {name} on port {port}...")
-
-        cmd = [
-            python_exe,
-            "-m",
-            "uvicorn",
-            f"backend.services.{name}.main:app",
-            "--port",
-            str(port),
-            "--host",
-            "127.0.0.1",
-        ]
-
-        proc = subprocess.Popen(
-            cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            env=env,
-            cwd=cwd_dir,
-            text=True,
-            bufsize=1,
-        )
-        processes.append((name, proc))
-        t = threading.Thread(target=log_stream, args=(name, proc.stdout), daemon=True)
-        t.start()
+        proc = _launch_single_service(svc, env, cwd_dir, python_exe)
+        processes.append((svc["name"], proc))
 
     logger.info("All microservice processes launched.")
 
@@ -122,10 +161,11 @@ _services_ready = False
 @app.on_event("startup")
 async def startup_event():
     logger.info("Gateway starting up — launching microservices in background...")
-    # Run start_services in a thread so uvicorn can accept health-check
-    # connections immediately (Render times out if we block here)
     t = threading.Thread(target=_boot_services, daemon=True)
     t.start()
+    
+    # Start the watchdog process health task
+    asyncio.create_task(_watchdog_loop())
     logger.info("Gateway accepting connections. Microservices booting in background.")
 
 def _boot_services():
@@ -138,6 +178,23 @@ def _boot_services():
         logger.info("Gateway boot sequence complete. All microservices ready.")
     except Exception as e:
         logger.error(f"Error during background service boot: {e}")
+
+async def _watchdog_loop():
+    logger.info("Watchdog task initialized.")
+    while True:
+        await asyncio.sleep(5)
+        if not _services_ready:
+            continue
+            
+        for i, (name, proc) in enumerate(processes):
+            ret = proc.poll()
+            if ret is not None:
+                logger.warning(f"WARNING: Service {name} terminated unexpectedly with code {ret}. Restarting...")
+                svc_cfg = next((s for s in SERVICES if s["name"] == name), None)
+                if svc_cfg:
+                    # Restart this process
+                    new_proc = _launch_single_service(svc_cfg, _svc_env, _svc_cwd, _svc_py)
+                    processes[i] = (name, new_proc)
 
 @app.on_event("shutdown")
 async def shutdown_event():
