@@ -199,10 +199,12 @@ export default function RelationshipGraph({ businessName, mobileMenuOpen }: Rela
     const fetchGraph = async () => {
       setIsLoading(true);
       try {
+        const isLocal = typeof window !== 'undefined' && 
+          (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
         const baseUrl = process.env.NEXT_PUBLIC_API_URL || "";
-        const url = baseUrl 
+        const url = (baseUrl && !isLocal)
           ? `${baseUrl.replace(/\/$/, "")}/api/v1/graph/d3` 
-          : "http://localhost:8003/api/v1/graph/d3";
+          : "http://127.0.0.1:8003/api/v1/graph/d3";
         const res = await fetch(url);
         if (res.ok) {
           const data = await res.json();
@@ -599,11 +601,11 @@ export default function RelationshipGraph({ businessName, mobileMenuOpen }: Rela
 
     const isMobile = layoutMode === 'mobile';
     const isTablet = layoutMode === 'tablet';
-    const linkDistance = isMobile ? 90 : (isTablet ? 120 : 180);
-    const chargeStrength = isMobile ? -200 : (isTablet ? -400 : -800);
+    const linkDistance = isMobile ? 110 : (isTablet ? 120 : 180);
+    const chargeStrength = isMobile ? -350 : (isTablet ? -400 : -800);
     const collideRadius = (d: any) => {
       const baseSize = isMobile ? (d.valueSize ?? 24) * 0.8 : (d.valueSize ?? 24);
-      return baseSize + (isMobile ? 20 : (isTablet ? 30 : 54));
+      return baseSize + (isMobile ? 24 : (isTablet ? 30 : 54));
     };
 
     // Force simulation configurations (strong collision & constraints for clean positions)
@@ -742,8 +744,15 @@ export default function RelationshipGraph({ businessName, mobileMenuOpen }: Rela
         return truncateLabel(d.name, 12);
       });
 
+    let tickCount = 0;
     // Simulation tick loop
     simulation.on("tick", () => {
+      tickCount++;
+      const isMobileOrTablet = layoutMode === 'mobile' || layoutMode === 'tablet' || window.innerWidth < 1280 || isFullscreen;
+      if (isMobileOrTablet && (tickCount === 25 || tickCount === 50 || tickCount === 80 || tickCount === 120 || tickCount === 160)) {
+        fitGraph(selectedNode);
+      }
+
       // 1. Constrain node coordinates to stay inside the viewport bounds
       filteredNodes.forEach((d) => {
         const r = (isMobile ? (d.valueSize ?? 24) * 0.8 : (d.valueSize ?? 24)) + 10;
@@ -752,7 +761,6 @@ export default function RelationshipGraph({ businessName, mobileMenuOpen }: Rela
       });
 
       // 2. Collision detection for labels
-      const isMobileOrTablet = layoutMode === 'mobile' || layoutMode === 'tablet' || window.innerWidth < 1280;
       if (isMobileOrTablet) {
         const labelBoxes: { x: number; y: number; w: number; h: number }[] = [];
         const sortedNodes = [...filteredNodes].sort((a, b) => (a.y || 0) - (b.y || 0));

@@ -97,8 +97,10 @@ const POPULAR_SEARCHES = [
 ];
 
 const getServiceUrl = (port: number, path: string): string => {
+  const isLocal = typeof window !== 'undefined' && 
+    (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
   const baseUrl = process.env.NEXT_PUBLIC_API_URL;
-  if (baseUrl) {
+  if (baseUrl && !isLocal) {
     const cleanBase = baseUrl.replace(/\/$/, "");
     const cleanPath = path.replace(/^\//, "");
     return `${cleanBase}/${cleanPath}`;
